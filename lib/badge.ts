@@ -1,4 +1,5 @@
 import { browser } from "wxt/browser";
+import { storage } from "wxt/utils/storage";
 import type { Candidate } from "./candidates";
 import { ownMatches } from "./discover";
 import { type Lookup, panel, panelOrigin } from "./panel";
@@ -15,25 +16,43 @@ export async function anyFaceitTab(): Promise<number | undefined> {
   return tab?.id;
 }
 
-export async function setBadgeCount(count: number | null) {
-  await browser.action.setBadgeText({
-    text: !count ? "" : count >= 100 ? "100+" : String(count),
-  });
+export type Unimported = { faceit: number; valve: number };
+
+// The last count, split by source, for the toolbar popup to show without
+// waiting on a fresh one.
+export const unimportedCounts = storage.defineItem<Unimported | null>(
+  "local:unimported",
+  { fallback: null },
+);
+
+export async function showUnimported(counts: Unimported | null) {
+  const total = counts ? counts.faceit + counts.valve : 0;
+  await Promise.all([
+    unimportedCounts.setValue(counts),
+    browser.action.setBadgeText({
+      text: !total ? "" : total >= 100 ? "100+" : String(total),
+    }),
+  ]);
 }
 
 export function unimported(
   candidates: Array<Candidate>,
   lookups: Record<string, Lookup>,
   imports: { faceit: boolean; valve: boolean },
-): number {
-  return candidates.filter(
-    (candidate) =>
+): Unimported {
+  const counts: Unimported = { faceit: 0, valve: 0 };
+  for (const candidate of candidates) {
+    if (
       imports[candidate.source] &&
-      (lookups[candidate.key]?.state ?? "none") === "none",
-  ).length;
+      (lookups[candidate.key]?.state ?? "none") === "none"
+    ) {
+      counts[candidate.source]++;
+    }
+  }
+  return counts;
 }
 
-async function countUnimported(): Promise<number | null> {
+async function countUnimported(): Promise<Unimported | null> {
   const origin = await panelOrigin.getValue();
   const user = await panel.me(origin).catch(() => null);
   if (!user) {
@@ -63,5 +82,5 @@ async function countUnimported(): Promise<number | null> {
 }
 
 export async function refreshBadge() {
-  await setBadgeCount(await countUnimported().catch(() => null));
+  await showUnimported(await countUnimported().catch(() => null));
 }

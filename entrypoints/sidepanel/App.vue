@@ -21,11 +21,7 @@ import {
   savedPanels,
 } from "@/lib/panel";
 import { activeTab } from "@/lib/tabs";
-import {
-  anyFaceitTab,
-  setBadgeCount,
-  unimported,
-} from "@/lib/badge";
+import { anyFaceitTab, showUnimported, unimported } from "@/lib/badge";
 
 type Phase = "loading" | "setup" | "error" | "login" | "ready";
 
@@ -276,7 +272,7 @@ function settleTab() {
 
 function updateBadge() {
   if (ownLoaded.value && user.value) {
-    void setBadgeCount(
+    void showUnimported(
       unimported(ownList.value, lookups.value, user.value.imports),
     );
   }
@@ -367,7 +363,7 @@ async function logout() {
   ownList.value = [];
   pageList.value = [];
   phase.value = "login";
-  void setBadgeCount(null);
+  void showUnimported(null);
 }
 
 async function refreshPage(force = false) {
