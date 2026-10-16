@@ -52,6 +52,11 @@ export default defineBackground(() => {
       recount();
     }
   });
+  browser.tabs.onActivated.addListener(({ tabId }) => {
+    if (supportedTabs.get(tabId)) {
+      recount();
+    }
+  });
   browser.runtime.onMessage.addListener((message: unknown) => {
     if (message === REFRESH_BADGE) {
       recount(true);
@@ -67,4 +72,5 @@ export default defineBackground(() => {
       }
     }
   });
+  recount(true);
 });

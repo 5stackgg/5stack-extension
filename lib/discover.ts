@@ -45,6 +45,34 @@ export async function ownFaceitId(tabId: number, user: PanelUser) {
   return session?.payload?.id ?? session?.payload?.guid ?? null;
 }
 
+// Imports are for the player's own matches, so this is the list the panel and
+// the badge work from: their Leetify matches, which carry Valve and FACEIT,
+// merged with their FACEIT history when there is a FACEIT tab to read it from.
+export async function ownMatches(
+  user: PanelUser,
+  faceitTabId: number | undefined,
+): Promise<Array<Candidate>> {
+  const [leetify, faceitRows] = await Promise.all([
+    leetifyProfileCandidates(user.steam_id, user.steam_id).catch(
+      (): Array<Candidate> => [],
+    ),
+    faceitTabId === undefined
+      ? Promise.resolve([])
+      : ownFaceitId(faceitTabId, user)
+          .then((playerId) =>
+            playerId ? faceitHistory(faceitTabId, playerId, true) : [],
+          )
+          .catch((): Array<Candidate> => []),
+  ]);
+  const merged = new Map<string, Candidate>();
+  for (const candidate of [...leetify, ...faceitRows]) {
+    merged.set(candidate.key, candidate);
+  }
+  return [...merged.values()].sort((a, b) =>
+    (b.finishedAt ?? "").localeCompare(a.finishedAt ?? ""),
+  );
+}
+
 export async function discover(
   page: Page,
   tabId: number | undefined,

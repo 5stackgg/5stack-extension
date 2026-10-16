@@ -29,7 +29,7 @@ export type PanelUser = {
   name: string;
   avatar_url: string | null;
   role: string;
-  imports: { faceit: boolean; valve: boolean };
+  imports: { faceit: boolean; valve: boolean; anyone?: boolean };
   faceit: { player_id: string; nickname: string | null } | null;
 };
 

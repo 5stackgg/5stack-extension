@@ -15,6 +15,7 @@ const props = defineProps<{
   selectable: boolean;
   selected: boolean;
   origin: string;
+  tag?: string;
 }>();
 
 defineEmits<{ toggle: [] }>();
@@ -131,7 +132,14 @@ const note = computed(() => {
 
     <div class="min-w-0 flex-1">
       <div class="flex items-baseline justify-between gap-3">
-        <span class="truncate text-sm font-semibold">{{ maps }}</span>
+        <span class="flex min-w-0 items-center gap-2">
+          <span class="truncate text-sm font-semibold">{{ maps }}</span>
+          <span
+            v-if="tag"
+            class="shrink-0 rounded-sm bg-[hsl(var(--tac-amber)/0.15)] px-1.5 py-0.5 font-mono text-[0.55rem] uppercase leading-none tracking-[0.14em] text-[hsl(var(--tac-amber))]"
+            >{{ tag }}</span
+          >
+        </span>
         <span
           v-if="candidate.score"
           class="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"

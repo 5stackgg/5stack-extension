@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { browser } from "wxt/browser";
-import { Loader2, RotateCw } from "lucide-vue-next";
+import { Info, Loader2, RotateCw } from "lucide-vue-next";
 import AppHeader from "@/components/AppHeader.vue";
 import LoginGate from "@/components/LoginGate.vue";
 import MatchRow from "@/components/MatchRow.vue";
@@ -9,7 +9,7 @@ import OriginSetup from "@/components/OriginSetup.vue";
 import AnimatedFilters from "@/components/ui/AnimatedFilters.vue";
 import Button from "@/components/ui/Button.vue";
 import type { Candidate } from "@/lib/candidates";
-import { discover, importFaceitMatch } from "@/lib/discover";
+import { discover, importFaceitMatch, ownMatches } from "@/lib/discover";
 import { type Page, pageFromUrl, samePage } from "@/lib/page";
 import {
   DEFAULT_PANEL,
@@ -21,7 +21,11 @@ import {
   savedPanels,
 } from "@/lib/panel";
 import { activeTab } from "@/lib/tabs";
-import { REFRESH_BADGE } from "@/lib/badge";
+import {
+  anyFaceitTab,
+  setBadgeCount,
+  unimported,
+} from "@/lib/badge";
 
 type Phase = "loading" | "setup" | "error" | "login" | "ready";
 
@@ -39,11 +43,20 @@ const panelProblem = ref<string | null>(null);
 // Each FACEIT or Leetify tab gets its own panel; background.ts names the tab.
 const panelTabId = Number(new URLSearchParams(location.search).get("tab")) || undefined;
 
+// The player's own matches are the list; they are loaded once and kept, so
+// moving between FACEIT and Leetify pages never empties it.
+const ownList = ref<Array<Candidate>>([]);
+const ownLoaded = ref(false);
+const ownProblem = ref<string | null>(null);
+
+// What the page in this tab shows, for context: the room the player was in
+// is pinned to the top, and someone else's page says why it is not offered,
+// unless the player may import anyone's matches.
 const page = ref<Page>({ site: "none" });
 const tabId = ref<number>();
-const candidates = ref<Array<Candidate>>([]);
-const discovering = ref(false);
-const discoverProblem = ref<string | null>(null);
+const pageList = ref<Array<Candidate>>([]);
+const pageLoading = ref(false);
+const pageProblem = ref<string | null>(null);
 
 const lookups = ref<Record<string, Lookup>>({});
 const progress = ref<Record<string, string>>({});
@@ -57,29 +70,67 @@ let discoverRun = 0;
 let poll: ReturnType<typeof setInterval> | undefined;
 let signing: Promise<unknown> = Promise.resolve();
 
-const pageTitle = computed(() => {
+const othersPage = computed(
+  () =>
+    page.value.site !== "none" &&
+    page.value.kind !== "home" &&
+    pageList.value.length > 0 &&
+    !pageList.value.some((candidate) => candidate.own),
+);
+
+const showingPage = computed(
+  () => othersPage.value && !!user.value?.imports.anyone,
+);
+
+const pinned = computed(() =>
+  page.value.site === "faceit" &&
+  page.value.kind === "room" &&
+  pageList.value[0]?.own
+    ? pageList.value[0]
+    : null,
+);
+
+const candidates = computed<Array<Candidate>>(() => {
+  if (showingPage.value) {
+    return pageList.value;
+  }
+  const pin = pinned.value;
+  return pin
+    ? [pin, ...ownList.value.filter((candidate) => candidate.key !== pin.key)]
+    : ownList.value;
+});
+
+const listLoading = computed(() =>
+  showingPage.value ? pageLoading.value : !ownLoaded.value,
+);
+const listProblem = computed(() =>
+  showingPage.value ? pageProblem.value : ownProblem.value,
+);
+
+const pageSubject = computed(() => {
   switch (page.value.site) {
     case "faceit":
-      if (page.value.kind === "room") {
-        return "FACEIT Match";
-      }
-      if (page.value.kind === "home") {
-        return user.value?.faceit?.nickname
-          ? `FACEIT · ${user.value.faceit.nickname}`
-          : "Your FACEIT Matches";
-      }
-      return `FACEIT · ${page.value.nickname}`;
+      return page.value.kind === "player"
+        ? `${page.value.nickname}'s matches`
+        : "This match";
     case "leetify":
-      if (page.value.kind === "home") {
-        return "Your Leetify Matches";
-      }
-      return page.value.kind === "profile" ? "Leetify Profile" : "Leetify Match";
+      return page.value.kind === "profile" ? "This profile's matches" : "This match";
     default:
       return "";
   }
 });
 
-type Tab = "import" | "imported" | "others";
+const contextNote = computed(() => {
+  if (showingPage.value) {
+    return `${pageSubject.value}. As a match organizer you can import them.`;
+  }
+  if (othersPage.value) {
+    return "You can only import matches you played. Yours are below.";
+  }
+  return null;
+});
+
+type Tab = "import" | "imported";
 
 const listTab = ref<Tab>("import");
 
@@ -87,17 +138,13 @@ const listTab = ref<Tab>("import");
 // until they land under Imported.
 function tabOf(candidate: Candidate): Tab {
   const state = lookups.value[candidate.key]?.state ?? "none";
-  if (state === "imported" && !progress.value[candidate.key]) {
-    return "imported";
-  }
-  if (!candidate.own && user.value?.role !== "administrator") {
-    return "others";
-  }
-  return "import";
+  return state === "imported" && !progress.value[candidate.key]
+    ? "imported"
+    : "import";
 }
 
 const tabCounts = computed(() => {
-  const counts: Record<Tab, number> = { import: 0, imported: 0, others: 0 };
+  const counts: Record<Tab, number> = { import: 0, imported: 0 };
   for (const candidate of candidates.value) {
     counts[tabOf(candidate)]++;
   }
@@ -107,9 +154,6 @@ const tabCounts = computed(() => {
 const tabOptions = computed(() => [
   { key: "import", label: "To Import", count: tabCounts.value.import },
   { key: "imported", label: "Imported", count: tabCounts.value.imported },
-  ...(tabCounts.value.others > 0
-    ? [{ key: "others", label: "Others", count: tabCounts.value.others }]
-    : []),
 ]);
 
 const tabModel = computed({
@@ -126,9 +170,8 @@ const visibleCandidates = computed(() =>
 const emptyTabText = computed(
   () =>
     ({
-      import: "Nothing left to import here.",
+      import: "Everything here is in 5Stack.",
       imported: "None of these are in 5Stack yet.",
-      others: "",
     })[listTab.value],
 );
 
@@ -139,9 +182,6 @@ const selectedCandidates = computed(() =>
 function disabledReason(candidate: Candidate): string | undefined {
   if (user.value && !user.value.imports[candidate.source]) {
     return `${candidate.source === "faceit" ? "FACEIT" : "Valve"} imports are off on this panel.`;
-  }
-  if (!candidate.own && user.value?.role !== "administrator") {
-    return "Only matches you played can be imported.";
   }
   return undefined;
 }
@@ -165,10 +205,43 @@ function toggle(candidate: Candidate) {
   selected.value = next;
 }
 
-function selectNew() {
-  selected.value = new Set(
-    candidates.value.filter(selectable).map((candidate) => candidate.key),
-  );
+function selectNew(list: Array<Candidate>) {
+  selected.value = new Set([
+    ...selected.value,
+    ...list.filter(selectable).map((candidate) => candidate.key),
+  ]);
+}
+
+function settleTab() {
+  listTab.value =
+    tabCounts.value.import > 0 || tabCounts.value.imported === 0
+      ? "import"
+      : "imported";
+}
+
+function updateBadge() {
+  if (ownLoaded.value && user.value) {
+    void setBadgeCount(
+      unimported(ownList.value, lookups.value, user.value.imports),
+    );
+  }
+}
+
+async function loadOwn() {
+  ownProblem.value = null;
+  try {
+    const faceitTab = page.value.site === "faceit" ? tabId.value : undefined;
+    const found = await ownMatches(user.value!, faceitTab ?? (await anyFaceitTab()));
+    await lookupAll(found);
+    ownList.value = found;
+    selectNew(found);
+  } catch (error) {
+    ownProblem.value = (error as Error).message;
+  } finally {
+    ownLoaded.value = true;
+    settleTab();
+    updateBadge();
+  }
 }
 
 // A new panel is only saved once it answers: logged in, or logged out (403)
@@ -204,7 +277,10 @@ async function connect(next?: string) {
     return;
   }
   phase.value = "ready";
+  ownLoaded.value = false;
+  ownList.value = [];
   await refreshPage(true);
+  await loadOwn();
 }
 
 function addPanel() {
@@ -233,9 +309,10 @@ function openPanel() {
 async function logout() {
   await panel.logout(origin.value).catch(() => undefined);
   user.value = null;
-  candidates.value = [];
+  ownList.value = [];
+  pageList.value = [];
   phase.value = "login";
-  void browser.runtime.sendMessage(REFRESH_BADGE).catch(() => undefined);
+  void setBadgeCount(null);
 }
 
 async function refreshPage(force = false) {
@@ -254,42 +331,38 @@ async function refreshPage(force = false) {
   const run = ++discoverRun;
   page.value = next;
   tabId.value = tab?.id;
-  candidates.value = [];
-  selected.value = new Set();
-  discoverProblem.value = null;
-  if (next.site === "none") {
-    discovering.value = false;
+  pageList.value = [];
+  pageProblem.value = null;
+  if (next.site === "none" || next.kind === "home") {
+    pageLoading.value = false;
     return;
   }
 
-  discovering.value = true;
+  pageLoading.value = true;
   try {
     const found = await discover(next, tab?.id, user.value!);
     if (run !== discoverRun) {
       return;
     }
-    candidates.value = found;
-    await lookupAll();
+    await lookupAll(found);
     if (run === discoverRun) {
-      selectNew();
-      listTab.value =
-        tabCounts.value.import > 0 || tabCounts.value.imported === 0
-          ? "import"
-          : "imported";
+      pageList.value = found;
+      if (user.value?.imports.anyone || found.some((c) => c.own)) {
+        selectNew(found.filter((c) => c.own || user.value?.imports.anyone));
+      }
     }
   } catch (error) {
     if (run === discoverRun) {
-      discoverProblem.value = (error as Error).message;
+      pageProblem.value = (error as Error).message;
     }
   } finally {
     if (run === discoverRun) {
-      discovering.value = false;
+      pageLoading.value = false;
     }
   }
 }
 
-async function lookupAll() {
-  const listed = candidates.value;
+async function lookupAll(listed: Array<Candidate> = candidates.value) {
   for (let offset = 0; offset < listed.length; offset += LOOKUP_BATCH) {
     const batch = listed.slice(offset, offset + LOOKUP_BATCH);
     const faceit = batch.filter((c) => c.source === "faceit");
@@ -414,7 +487,7 @@ async function importSelected() {
     await lookupAll();
   } finally {
     importing.value = false;
-    void browser.runtime.sendMessage(REFRESH_BADGE).catch(() => undefined);
+    updateBadge();
   }
 }
 
@@ -450,7 +523,7 @@ onMounted(async () => {
         .then((me) => {
           user.value = me;
           phase.value = "ready";
-          return refreshPage(true);
+          return refreshPage(true).then(loadOwn);
         })
         .catch(() => undefined);
       return;
@@ -460,7 +533,9 @@ onMounted(async () => {
       return state === "queued" || state === "importing";
     });
     if (phase.value === "ready" && waiting && !importing.value) {
-      void lookupAll().catch(() => undefined);
+      void lookupAll()
+        .then(updateBadge)
+        .catch(() => undefined);
     }
   }, POLL_MS);
   await connect();
@@ -527,52 +602,36 @@ onBeforeUnmount(() => {
           @change-panel="addPanel"
         />
 
-        <div v-else-if="page.site === 'none'" key="none" class="p-4">
+        <div v-else key="list">
           <div
-            class="mb-2 inline-flex items-center gap-2 font-sans text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground"
+            v-if="contextNote"
+            class="flex items-start gap-2 border-b border-border bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground"
           >
-            <span
-              class="inline-block h-[2px] w-[10px] bg-[hsl(var(--tac-amber))]"
-            />
-            Nothing To Import
-          </div>
-          <p class="text-[0.85rem] text-muted-foreground">
-            Open a FACEIT match room or player page, or a Leetify profile or
-            match. Matches with demos show up here.
-          </p>
-        </div>
-
-        <div v-else :key="JSON.stringify(page)">
-          <div
-            class="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5"
-          >
-            <div
-              class="inline-flex min-w-0 items-center gap-2 font-sans text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground"
-            >
-              <span
-                class="inline-block h-[2px] w-[10px] shrink-0 bg-[hsl(var(--tac-amber))]"
-              />
-              <span class="truncate">{{ pageTitle }}</span>
-            </div>
+            <Info class="mt-px size-3.5 shrink-0" />
+            <span>{{ contextNote }}</span>
           </div>
 
           <div
-            v-if="!discovering && !discoverProblem && candidates.length > 0"
+            v-if="!listLoading && !listProblem && candidates.length > 0"
             class="border-b border-border px-4 py-2.5"
           >
             <AnimatedFilters v-model="tabModel" :options="tabOptions" />
           </div>
 
-          <div v-if="discovering" class="divide-y divide-border">
-            <div v-for="row in 3" :key="row" class="space-y-2 px-4 py-3">
+          <div v-if="listLoading" class="divide-y divide-border">
+            <div v-for="row in 4" :key="row" class="space-y-2 px-4 py-3">
               <div class="h-4 w-1/2 animate-pulse rounded bg-muted motion-reduce:animate-none" />
               <div class="h-3 w-1/3 animate-pulse rounded bg-muted/60 motion-reduce:animate-none" />
             </div>
           </div>
 
-          <div v-else-if="discoverProblem" class="space-y-3 p-4">
-            <p class="text-sm text-destructive">{{ discoverProblem }}</p>
-            <Button variant="outline" size="sm" @click="refreshPage(true)">
+          <div v-else-if="listProblem" class="space-y-3 p-4">
+            <p class="text-sm text-destructive">{{ listProblem }}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              @click="showingPage ? refreshPage(true) : loadOwn()"
+            >
               <RotateCw />
               Try Again
             </Button>
@@ -583,9 +642,9 @@ onBeforeUnmount(() => {
             class="p-4 text-[0.85rem] text-muted-foreground"
           >
             {{
-              page.site === "faceit" && page.kind === "room"
-                ? "FACEIT has no demo for this match yet."
-                : "No matches with demos on this page."
+              showingPage
+                ? "No matches with demos on this page."
+                : "No recent matches found for you on FACEIT or Leetify. Leetify needs a public profile, and FACEIT history loads from an open FACEIT tab."
             }}
           </p>
 
@@ -613,6 +672,7 @@ onBeforeUnmount(() => {
               :selectable="selectable(candidate)"
               :selected="selected.has(candidate.key)"
               :origin="origin"
+              :tag="pinned?.key === candidate.key ? 'This Match' : undefined"
               @toggle="toggle(candidate)"
             />
           </TransitionGroup>
@@ -627,14 +687,14 @@ onBeforeUnmount(() => {
       <Button
         variant="tactical"
         class="w-full"
-        :disabled="selected.size === 0"
+        :disabled="selectedCandidates.length === 0"
         :loading="importing"
         @click="importSelected"
       >
         {{
-          selected.size === 0
+          selectedCandidates.length === 0
             ? "Import"
-            : `Import ${selected.size} ${selected.size === 1 ? "Match" : "Matches"}`
+            : `Import ${selectedCandidates.length} ${selectedCandidates.length === 1 ? "Match" : "Matches"}`
         }}
       </Button>
       <p
