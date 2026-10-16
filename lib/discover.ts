@@ -34,15 +34,16 @@ export async function faceitHistory(
 
 // Off a match or player page, the list is the signed-in player's own: their
 // FACEIT account as 5Stack knows it, else whoever is logged in to FACEIT.
-export async function ownFaceitId(tabId: number, user: PanelUser) {
-  if (user.faceit?.player_id) {
-    return user.faceit.player_id;
-  }
+async function faceitSessionId(tabId: number): Promise<string | null> {
   const session = await faceit<{ payload?: { id?: string; guid?: string } }>(
     tabId,
     "/api/users/v1/sessions/me",
   ).catch(() => null);
   return session?.payload?.id ?? session?.payload?.guid ?? null;
+}
+
+export async function ownFaceitId(tabId: number, user: PanelUser) {
+  return user.faceit?.player_id ?? (await faceitSessionId(tabId));
 }
 
 // Imports are for the player's own matches, so this is the list the panel and
@@ -101,7 +102,9 @@ export async function discover(
       };
     }>(tabId, `/api/users/v1/nicknames/${encodeURIComponent(page.nickname)}`);
     const profile = found.payload;
+    const signedIn = profile?.id ? await faceitSessionId(tabId) : null;
     const own =
+      (!!profile?.id && profile.id === signedIn) ||
       (!!profile?.id && profile.id === user.faceit?.player_id) ||
       (!!user.faceit?.nickname &&
         (profile?.nickname ?? page.nickname).toLowerCase() ===
