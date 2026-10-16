@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { browser } from "wxt/browser";
-import { Loader2, RotateCw } from "lucide-vue-next";
+import { ArrowLeft, Loader2, RotateCw } from "lucide-vue-next";
 import AppHeader from "@/components/AppHeader.vue";
 import LoginGate from "@/components/LoginGate.vue";
 import MatchRow from "@/components/MatchRow.vue";
@@ -36,6 +36,8 @@ const panelProblem = ref<string | null>(null);
 
 const page = ref<Page>({ site: "none" });
 const tabId = ref<number>();
+const activeTabId = ref<number>();
+const activeUrl = ref<string>();
 const candidates = ref<Array<Candidate>>([]);
 const discovering = ref(false);
 const discoverProblem = ref<string | null>(null);
@@ -73,6 +75,54 @@ const pageTitle = computed(() => {
       return "";
   }
 });
+
+// The match open in the active tab, when that tab is one of this panel's
+// match pages, so its row can be picked out of the list.
+const viewingMatchId = computed(() => {
+  if (!activeUrl.value?.startsWith(`${origin.value}/matches/`)) {
+    return null;
+  }
+  return (
+    activeUrl.value
+      .slice(`${origin.value}/matches/`.length)
+      .match(/^[0-9a-f-]{36}/i)?.[0]
+      ?.toLowerCase() ?? null
+  );
+});
+
+const awayFromList = computed(
+  () =>
+    page.value.site !== "none" &&
+    tabId.value !== undefined &&
+    activeTabId.value !== tabId.value,
+);
+
+function showsMatch(candidate: Candidate): boolean {
+  const lookup = lookups.value[candidate.key];
+  const ids = [lookup?.match_id, ...(lookup?.match_ids ?? [])];
+  return !!viewingMatchId.value && ids.includes(viewingMatchId.value);
+}
+
+watch(viewingMatchId, async (matchId) => {
+  if (!matchId) {
+    return;
+  }
+  await nextTick();
+  document.querySelector("[data-highlighted]")?.scrollIntoView({
+    block: "nearest",
+    behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth",
+  });
+});
+
+function backToList() {
+  if (tabId.value !== undefined) {
+    void browser.tabs.update(tabId.value, { active: true }).catch(() => {
+      tabId.value = undefined;
+    });
+  }
+}
 
 const selectedCandidates = computed(() =>
   candidates.value.filter((candidate) => selected.value.has(candidate.key)),
@@ -181,7 +231,14 @@ async function refreshPage(force = false) {
     return;
   }
   const tab = await activeTab();
+  activeTabId.value = tab?.id;
+  activeUrl.value = tab?.url;
   const next = pageFromUrl(tab?.url);
+
+  // Opening a match in 5Stack, or any other tab, keeps the list it came from.
+  if (next.site === "none" && !force) {
+    return;
+  }
   if (!force && samePage(next, page.value) && tab?.id === tabId.value) {
     return;
   }
@@ -492,6 +549,23 @@ onBeforeUnmount(() => {
             </Button>
           </div>
 
+          <Transition
+            enter-active-class="transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none"
+            enter-from-class="opacity-0 -translate-y-1"
+            leave-active-class="transition-opacity duration-150 ease-in motion-reduce:transition-none"
+            leave-to-class="opacity-0"
+          >
+            <button
+              v-if="awayFromList && candidates.length > 0"
+              type="button"
+              class="flex w-full items-center gap-2 border-b border-border bg-[hsl(var(--tac-amber)/0.08)] px-4 py-2 text-left text-xs text-[hsl(var(--tac-amber))] transition-colors hover:bg-[hsl(var(--tac-amber)/0.14)]"
+              @click="backToList"
+            >
+              <ArrowLeft class="size-3.5 shrink-0" />
+              <span class="truncate">Back to {{ pageTitle }}</span>
+            </button>
+          </Transition>
+
           <div v-if="discovering" class="divide-y divide-border">
             <div v-for="row in 3" :key="row" class="space-y-2 px-4 py-3">
               <div class="h-4 w-1/2 animate-pulse rounded bg-muted motion-reduce:animate-none" />
@@ -534,6 +608,7 @@ onBeforeUnmount(() => {
               :disabled-reason="disabledReason(candidate)"
               :selectable="selectable(candidate)"
               :selected="selected.has(candidate.key)"
+              :highlighted="showsMatch(candidate)"
               :origin="origin"
               @toggle="toggle(candidate)"
             />
