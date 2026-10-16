@@ -13,7 +13,6 @@ const props = defineProps<{
   disabledReason?: string;
   selectable: boolean;
   selected: boolean;
-  highlighted?: boolean;
   origin: string;
 }>();
 
@@ -73,13 +72,9 @@ const note = computed(
 
 <template>
   <label
-    :data-highlighted="highlighted || undefined"
     :class="[
       'group flex items-start gap-3 border-b border-border px-4 py-3 transition-colors duration-150 last:border-b-0',
       selectable ? 'cursor-pointer hover:bg-muted/30' : '',
-      highlighted
-        ? 'bg-[hsl(var(--tac-amber)/0.1)] shadow-[inset_3px_0_0_hsl(var(--tac-amber))]'
-        : '',
     ]"
   >
     <input

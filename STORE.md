@@ -66,9 +66,11 @@ Import the Counter-Strike 2 matches shown on the FACEIT or Leetify page the user
 
 **Permission justifications:**
 
-- **sidePanel:** the extension's whole interface is a side panel opened from
-  its toolbar icon. It stays open while the user works on the FACEIT page,
-  which FACEIT's captcha sometimes needs.
+- **sidePanel:** the extension's interface is a side panel, available only on
+  FACEIT and Leetify tabs and opened from the toolbar icon. It stays open while
+  the user works on the FACEIT page, which FACEIT's captcha sometimes needs, and
+  hides on any other tab. Elsewhere the icon opens a small popup saying where
+  the extension works.
 - **storage:** keeps the address of the user's 5Stack panel.
 - **scripting:** when the user imports a FACEIT match, runs a function in a
   faceit.com tab that reads that match from FACEIT's API and asks FACEIT for
