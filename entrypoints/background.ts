@@ -1,6 +1,7 @@
 import { browser } from "wxt/browser";
 import { defineBackground } from "wxt/utils/define-background";
 import { REFRESH_BADGE, refreshBadge } from "@/lib/badge";
+import { DEFAULT_PANEL, originPermission, savedPanels } from "@/lib/panel";
 
 const SUPPORTED = /^https:\/\/(www\.)?(faceit|leetify)\.com\//;
 const BADGE_INTERVAL_MS = 2 * 60 * 1000;
@@ -73,4 +74,32 @@ export default defineBackground(() => {
     }
   });
   recount(true);
+
+  // Self-hosted panels get the same installed marker as 5stack.gg, for each
+  // one the player has granted access to.
+  async function markPanels(panels: Array<string>) {
+    const origins: Array<string> = [];
+    for (const origin of panels.filter((panel) => panel !== DEFAULT_PANEL)) {
+      const pattern = originPermission(origin);
+      if (await browser.permissions.contains({ origins: [pattern] })) {
+        origins.push(pattern);
+      }
+    }
+    await browser.scripting
+      .unregisterContentScripts({ ids: ["panel-marker"] })
+      .catch(() => undefined);
+    if (origins.length > 0) {
+      await browser.scripting.registerContentScripts([
+        {
+          id: "panel-marker",
+          matches: origins,
+          js: ["content-scripts/panel-marker.js"],
+          runAt: "document_start",
+        },
+      ]);
+    }
+  }
+
+  void savedPanels.getValue().then(markPanels);
+  savedPanels.watch((panels) => void markPanels(panels));
 });

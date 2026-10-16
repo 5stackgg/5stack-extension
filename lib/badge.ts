@@ -2,7 +2,7 @@ import { browser } from "wxt/browser";
 import { storage } from "wxt/utils/storage";
 import type { Candidate } from "./candidates";
 import { ownMatches } from "./discover";
-import { type Lookup, panel, panelOrigin } from "./panel";
+import { type Lookup, panel, panelOrigin, rememberProfiles } from "./panel";
 
 const LOOKUP_BATCH = 50;
 
@@ -58,6 +58,7 @@ async function countUnimported(): Promise<Unimported | null> {
   if (!user) {
     return null;
   }
+  void rememberProfiles(user);
   const candidates = await ownMatches(user, await anyFaceitTab());
   const lookups: Record<string, Lookup> = {};
   for (let offset = 0; offset < candidates.length; offset += LOOKUP_BATCH) {

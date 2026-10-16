@@ -84,7 +84,10 @@ Import the Counter-Strike 2 matches shown on the FACEIT or Leetify page the user
     demo's download link, as above.
   - **leetify.com and api-public.cs-prod.leetify.com:** to recognise the
     Leetify page the user is on and read its matches from Leetify's public API.
-  - **5stack.gg:** the default 5Stack panel the matches are imported into.
+  - **5stack.gg:** the default 5Stack panel the matches are imported into. A
+    one-line script there marks the page as having the extension installed, so
+    the panel stops offering it; self-hosted panels get the same mark once the
+    user grants access.
   - **Any https site (optional, asked at setup):** 5Stack is self-hosted, so a
     user's panel can be on any domain. Chrome asks for access to the one host
     the user types in; nothing else is requested.

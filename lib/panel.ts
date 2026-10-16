@@ -8,6 +8,21 @@ export const panelOrigin = storage.defineItem<string>("local:panelOrigin", {
   fallback: DEFAULT_PANEL,
 });
 
+// Where the player's own FACEIT and Leetify pages are, for the popup's links.
+export const playerProfiles = storage.defineItem<{
+  faceit: string | null;
+  leetify: string;
+} | null>("local:playerProfiles", { fallback: null });
+
+export function rememberProfiles(user: PanelUser) {
+  return playerProfiles.setValue({
+    faceit: user.faceit?.nickname
+      ? `https://www.faceit.com/en/players/${encodeURIComponent(user.faceit.nickname)}`
+      : null,
+    leetify: `https://leetify.com/app/profile/${user.steam_id}`,
+  });
+}
+
 export const savedPanels = storage.defineItem<Array<string>>(
   "local:savedPanels",
   { fallback: [DEFAULT_PANEL] },

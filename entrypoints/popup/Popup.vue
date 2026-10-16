@@ -3,11 +3,13 @@ import { computed, onMounted, onBeforeUnmount, ref } from "vue";
 import { browser } from "wxt/browser";
 import { ExternalLink } from "lucide-vue-next";
 import Button from "@/components/ui/Button.vue";
-import { DEFAULT_PANEL, panelOrigin } from "@/lib/panel";
+import { DEFAULT_PANEL, panelOrigin, playerProfiles } from "@/lib/panel";
 import { REFRESH_BADGE, type Unimported, unimportedCounts } from "@/lib/badge";
 
 const origin = ref(DEFAULT_PANEL);
 const counts = ref<Unimported | null>(null);
+const faceitUrl = ref("https://www.faceit.com/en/home");
+const leetifyUrl = ref("https://leetify.com/app");
 const host = computed(() => new URL(origin.value).host);
 const total = computed(() =>
   counts.value ? counts.value.faceit + counts.value.valve : 0,
@@ -18,6 +20,9 @@ let unwatch: (() => void) | undefined;
 onMounted(async () => {
   origin.value = await panelOrigin.getValue();
   counts.value = await unimportedCounts.getValue();
+  const profiles = await playerProfiles.getValue();
+  faceitUrl.value = profiles?.faceit ?? faceitUrl.value;
+  leetifyUrl.value = profiles?.leetify ?? leetifyUrl.value;
   unwatch = unimportedCounts.watch((next) => {
     counts.value = next;
   });
@@ -68,7 +73,7 @@ function open(url: string) {
       <Button
         variant="tactical"
         class="gap-2"
-        @click="open('https://www.faceit.com/en/home')"
+        @click="open(faceitUrl)"
       >
         FACEIT
         <span v-if="counts" class="tabular-nums opacity-70">{{
@@ -79,7 +84,7 @@ function open(url: string) {
         variant="outline"
         class="gap-2"
         title="Your Valve matchmaking matches"
-        @click="open('https://leetify.com/app')"
+        @click="open(leetifyUrl)"
       >
         Leetify
         <span v-if="counts" class="tabular-nums text-muted-foreground">{{

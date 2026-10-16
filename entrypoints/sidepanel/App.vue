@@ -18,6 +18,7 @@ import {
   type PanelUser,
   panel,
   panelOrigin,
+  rememberProfiles,
   savedPanels,
 } from "@/lib/panel";
 import { activeTab } from "@/lib/tabs";
@@ -332,6 +333,7 @@ async function connect(next?: string) {
     phase.value = "login";
     return;
   }
+  void rememberProfiles(me);
   phase.value = "ready";
   ownLoaded.value = false;
   ownList.value = [];
