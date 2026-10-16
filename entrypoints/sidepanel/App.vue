@@ -655,11 +655,17 @@ onBeforeUnmount(() => {
             {{ emptyTabText }}
           </p>
 
+          <!-- A row that finishes or changes tab fades out of the flow (absolute)
+               while the rows below slide up into its place. -->
           <TransitionGroup
             v-else
             tag="div"
-            enter-active-class="transition-opacity duration-200 ease-out motion-reduce:transition-none"
-            enter-from-class="opacity-0"
+            class="relative"
+            enter-active-class="transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none"
+            enter-from-class="translate-y-1 opacity-0"
+            leave-active-class="absolute inset-x-0 transition-opacity duration-150 ease-in motion-reduce:transition-none"
+            leave-to-class="opacity-0"
+            move-class="transition-transform duration-300 ease-out motion-reduce:transition-none"
           >
             <MatchRow
               v-for="candidate in visibleCandidates"

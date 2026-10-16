@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { ArrowUpRight, CircleCheck } from "lucide-vue-next";
 import ProgressRing from "./ui/ProgressRing.vue";
 import type { Candidate } from "@/lib/candidates";
@@ -56,6 +56,40 @@ const mode = computed(() => {
   return state === "imported" ? "imported" : "pending";
 });
 
+// The download percent arrives a few points at a time every few seconds; it is
+// counted up to rather than shown jumping.
+const shownPercent = ref(props.lookup?.progress ?? 0);
+let frame = 0;
+
+watch(
+  () => props.lookup?.progress,
+  (target) => {
+    cancelAnimationFrame(frame);
+    if (typeof target !== "number") {
+      return;
+    }
+    const from = shownPercent.value;
+    if (
+      target <= from ||
+      matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      shownPercent.value = target;
+      return;
+    }
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min((now - start) / 900, 1);
+      shownPercent.value = Math.round(from + (target - from) * (1 - (1 - t) ** 3));
+      if (t < 1) {
+        frame = requestAnimationFrame(step);
+      }
+    };
+    frame = requestAnimationFrame(step);
+  },
+);
+
+onBeforeUnmount(() => cancelAnimationFrame(frame));
+
 const matchUrl = computed(() => {
   const id = props.lookup?.match_id ?? props.lookup?.match_ids?.[0];
   return mode.value === "imported" && id
@@ -63,35 +97,41 @@ const matchUrl = computed(() => {
     : undefined;
 });
 
+// The key names the stage, so the line fades only when the stage changes,
+// never on every percent.
 const note = computed(() => {
+  const working = "text-[hsl(var(--tac-amber))]";
   if (props.progress) {
-    return { text: props.progress, tone: "text-[hsl(var(--tac-amber))]" };
+    return { key: props.progress, text: props.progress, tone: working };
   }
   if (mode.value === "working") {
     const lookup = props.lookup;
-    return {
-      text:
-        lookup?.stage === "downloading"
-          ? `Downloading ${lookup.progress ?? 0}%`
-          : lookup?.stage === "processing"
-            ? "Processing the demo"
-            : lookup?.state === "importing"
-              ? "Importing"
-              : "Queued",
-      tone: "text-[hsl(var(--tac-amber))]",
-    };
+    if (lookup?.stage === "downloading") {
+      return { key: "downloading", text: "Downloading", tone: working, percent: true };
+    }
+    if (lookup?.stage === "processing") {
+      return { key: "processing", text: "Processing the demo", tone: working };
+    }
+    return lookup?.state === "importing"
+      ? { key: "importing", text: "Importing", tone: working }
+      : { key: "queued", text: "Queued", tone: working };
   }
   const failure =
     props.error ??
     (props.lookup?.state === "failed" ? props.lookup.reason : undefined);
   if (failure) {
-    return { text: failure, tone: "text-destructive" };
+    return { key: "failed", text: failure, tone: "text-destructive" };
   }
   if (props.disabledReason) {
-    return { text: props.disabledReason, tone: "text-muted-foreground" };
+    return {
+      key: "disabled",
+      text: props.disabledReason,
+      tone: "text-muted-foreground",
+    };
   }
   if (props.lookup?.match_ids?.length && mode.value === "pending") {
     return {
+      key: "partial",
       text: "Some maps are already in 5Stack",
       tone: "text-muted-foreground",
     };
@@ -112,23 +152,39 @@ const note = computed(() => {
       !selectable && mode === 'pending' ? 'opacity-60' : '',
     ]"
   >
-    <input
-      v-if="mode === 'pending'"
-      type="checkbox"
-      class="mt-0.5 size-4 shrink-0 cursor-pointer accent-[hsl(var(--tac-amber))] disabled:cursor-default disabled:opacity-30"
-      :checked="selected"
-      :disabled="!selectable"
-      :aria-label="`Select ${maps}`"
-      @change="$emit('toggle')"
-    />
-    <ProgressRing
-      v-else-if="mode === 'working'"
-      class="mt-px"
-      :progress="
-        !progress && lookup?.stage === 'downloading' ? lookup.progress : undefined
-      "
-    />
-    <CircleCheck v-else class="mt-0.5 size-4 shrink-0 text-success" />
+    <Transition
+      mode="out-in"
+      enter-active-class="transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none"
+      enter-from-class="scale-75 opacity-0"
+      leave-active-class="transition-[opacity,transform] duration-150 ease-in motion-reduce:transition-none"
+      leave-to-class="scale-75 opacity-0"
+    >
+      <input
+        v-if="mode === 'pending'"
+        key="pending"
+        type="checkbox"
+        class="mt-0.5 size-4 shrink-0 cursor-pointer accent-[hsl(var(--tac-amber))] disabled:cursor-default disabled:opacity-30"
+        :checked="selected"
+        :disabled="!selectable"
+        :aria-label="`Select ${maps}`"
+        @change="$emit('toggle')"
+      />
+      <ProgressRing
+        v-else-if="mode === 'working'"
+        key="working"
+        class="mt-px"
+        :progress="
+          !progress && lookup?.stage === 'downloading'
+            ? (lookup.progress ?? 0)
+            : undefined
+        "
+      />
+      <CircleCheck
+        v-else
+        key="imported"
+        class="mt-0.5 size-4 shrink-0 text-success"
+      />
+    </Transition>
 
     <div class="min-w-0 flex-1">
       <div class="flex items-baseline justify-between gap-3">
@@ -150,9 +206,18 @@ const note = computed(() => {
         {{ details.join(" · ") }}
         <template v-if="candidate.title"> · {{ candidate.title }}</template>
       </div>
-      <div v-if="note" class="mt-1 text-xs" :class="note.tone">
-        {{ note.text }}
-      </div>
+      <Transition
+        mode="out-in"
+        enter-active-class="transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none"
+        enter-from-class="-translate-y-0.5 opacity-0"
+        leave-active-class="transition-opacity duration-150 ease-in motion-reduce:transition-none"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="note" :key="note.key" class="mt-1 text-xs" :class="note.tone">
+          {{ note.text }}
+          <span v-if="note.percent" class="tabular-nums">{{ shownPercent }}%</span>
+        </div>
+      </Transition>
     </div>
 
     <ArrowUpRight
