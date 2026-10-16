@@ -64,26 +64,24 @@ function open(url: string) {
       <template v-else>Your recent matches are all in {{ host }}.</template>
     </p>
 
-    <div class="space-y-2">
+    <div class="grid grid-cols-2 gap-2">
       <Button
         variant="tactical"
-        class="w-full justify-between"
+        class="gap-2"
         @click="open('https://www.faceit.com/en/home')"
       >
-        <span>FACEIT</span>
-        <span v-if="counts" class="tabular-nums">{{ counts.faceit }}</span>
+        FACEIT
+        <span v-if="counts" class="tabular-nums opacity-70">{{
+          counts.faceit
+        }}</span>
       </Button>
       <Button
         variant="outline"
-        class="w-full justify-between"
+        class="gap-2"
+        title="Your Valve matchmaking matches"
         @click="open('https://leetify.com/app')"
       >
-        <span>
-          Leetify
-          <span class="ml-1 text-xs font-normal text-muted-foreground"
-            >Valve matches</span
-          >
-        </span>
+        Leetify
         <span v-if="counts" class="tabular-nums text-muted-foreground">{{
           counts.valve
         }}</span>
