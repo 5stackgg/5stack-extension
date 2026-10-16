@@ -2,7 +2,7 @@ import { type Candidate, faceitCandidate } from "./candidates";
 
 export type FaceitResult<T> =
   | { ok: true; value: T }
-  | { ok: false; error: string; noCheck?: boolean };
+  | { ok: false; error: string };
 
 // faceitGet and faceitSign are handed to chrome.scripting.executeScript and run
 // inside a faceit.com tab, so each must stand alone: nothing from this module's
@@ -42,11 +42,34 @@ export async function faceitSign(
     };
   }
 
+  // FACEIT loads its Turnstile check lazily and not on every page. Give it a
+  // moment, then load Cloudflare's script, the one FACEIT itself uses, so any
+  // FACEIT page can sign a demo.
+  for (let waited = 0; !page.turnstile && waited < 5000; waited += 250) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  if (!page.turnstile) {
+    try {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src =
+          "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    } catch {
+      return {
+        ok: false,
+        error: "Could not load FACEIT's check. Reload the FACEIT tab and try again.",
+      };
+    }
+  }
   if (!page.turnstile) {
     return {
       ok: false,
-      noCheck: true,
-      error: "FACEIT's check is not on this page. Open the match on FACEIT.",
+      error: "Could not load FACEIT's check. Reload the FACEIT tab and try again.",
     };
   }
 

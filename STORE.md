@@ -75,7 +75,10 @@ Import the Counter-Strike 2 matches shown on the FACEIT or Leetify page the user
 - **scripting:** when the user imports a FACEIT match, runs a function in a
   faceit.com tab that reads that match from FACEIT's API and asks FACEIT for
   the demo's download link, using the user's own FACEIT login, as FACEIT's own
-  "Watch demo" button does.
+  "Watch demo" button does. That request needs FACEIT's Cloudflare Turnstile
+  check; when the FACEIT page has not loaded it yet, the function adds
+  Cloudflare's Turnstile script (challenges.cloudflare.com) to that FACEIT page,
+  as FACEIT itself does. Nothing from it runs in the extension.
 - **Host permissions:**
   - **www.faceit.com:** to read the match or player on the page and get the
     demo's download link, as above.

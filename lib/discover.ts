@@ -10,7 +10,7 @@ import {
 import { leetifyMatchCandidates, leetifyProfileCandidates } from "./leetify";
 import type { Page } from "./page";
 import { panel, type PanelUser } from "./panel";
-import { closeTab, faceitTab, inTab, openFaceitRoom, showTab } from "./tabs";
+import { closeTab, faceitTab, inTab, showTab } from "./tabs";
 
 async function faceit<T>(tabId: number, path: string): Promise<T> {
   const result = await inTab(tabId, faceitGet, [path]);
@@ -93,7 +93,7 @@ export async function importFaceitMatch(
   matchId: string,
   onStep: (map: number, maps: number) => void,
 ): Promise<number> {
-  let { tabId, opened } = await faceitTab(matchId);
+  const { tabId, opened } = await faceitTab(matchId);
   try {
     const room = await faceit<{ payload?: FaceitRoomPayload }>(
       tabId,
@@ -106,12 +106,7 @@ export async function importFaceitMatch(
 
     for (const [index, resourceUrl] of demos.entries()) {
       onStep(index + 1, demos.length);
-      let signed = await inTab(tabId, faceitSign, [resourceUrl]);
-      if (!signed.ok && signed.noCheck && !opened) {
-        tabId = await openFaceitRoom(matchId);
-        opened = true;
-        signed = await inTab(tabId, faceitSign, [resourceUrl]);
-      }
+      const signed = await inTab(tabId, faceitSign, [resourceUrl]);
       if (!signed.ok) {
         throw new Error(signed.error);
       }

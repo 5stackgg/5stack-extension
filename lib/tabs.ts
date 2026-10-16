@@ -63,7 +63,7 @@ function loaded(tabId: number): Promise<void> {
   });
 }
 
-export async function openFaceitRoom(matchId: string): Promise<number> {
+async function openFaceitRoom(matchId: string): Promise<number> {
   const tab = await browser.tabs.create({
     url: `https://www.faceit.com/en/cs2/room/${matchId}`,
     active: false,
@@ -75,8 +75,9 @@ export async function openFaceitRoom(matchId: string): Promise<number> {
   return tab.id;
 }
 
-// Signing needs FACEIT's page and the user's FACEIT login, but not the match's
-// own room: any faceit.com tab with FACEIT's check loaded can sign any match.
+// Signing needs a faceit.com page and the user's FACEIT login, not the match's
+// own room: any FACEIT tab can sign any match. Only with none open is one
+// opened, in the background, and closed again once the demo is signed.
 export async function faceitTab(
   matchId: string,
 ): Promise<{ tabId: number; opened: boolean }> {
