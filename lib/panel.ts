@@ -20,6 +20,8 @@ export type Lookup = {
   match_id?: string;
   match_ids?: Array<string>;
   reason?: string;
+  stage?: "downloading" | "processing";
+  progress?: number;
 };
 
 export type PanelUser = {

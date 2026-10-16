@@ -27,7 +27,7 @@ type Phase = "loading" | "setup" | "error" | "login" | "ready";
 
 const LOOKUP_BATCH = 50;
 const VALVE_BATCH = 20;
-const POLL_MS = 5_000;
+const POLL_MS = 3_000;
 
 const origin = ref(DEFAULT_PANEL);
 const panels = ref<Array<string>>([DEFAULT_PANEL]);
@@ -79,16 +79,15 @@ const pageTitle = computed(() => {
   }
 });
 
-type Tab = "import" | "working" | "imported" | "others";
+type Tab = "import" | "imported" | "others";
 
 const listTab = ref<Tab>("import");
 
+// Imports in flight stay under To Import, with their progress on the row,
+// until they land under Imported.
 function tabOf(candidate: Candidate): Tab {
   const state = lookups.value[candidate.key]?.state ?? "none";
-  if (progress.value[candidate.key] || state === "queued" || state === "importing") {
-    return "working";
-  }
-  if (state === "imported") {
+  if (state === "imported" && !progress.value[candidate.key]) {
     return "imported";
   }
   if (!candidate.own && user.value?.role !== "administrator") {
@@ -98,7 +97,7 @@ function tabOf(candidate: Candidate): Tab {
 }
 
 const tabCounts = computed(() => {
-  const counts: Record<Tab, number> = { import: 0, working: 0, imported: 0, others: 0 };
+  const counts: Record<Tab, number> = { import: 0, imported: 0, others: 0 };
   for (const candidate of candidates.value) {
     counts[tabOf(candidate)]++;
   }
@@ -107,7 +106,6 @@ const tabCounts = computed(() => {
 
 const tabOptions = computed(() => [
   { key: "import", label: "To Import", count: tabCounts.value.import },
-  { key: "working", label: "Importing", count: tabCounts.value.working },
   { key: "imported", label: "Imported", count: tabCounts.value.imported },
   ...(tabCounts.value.others > 0
     ? [{ key: "others", label: "Others", count: tabCounts.value.others }]
@@ -129,7 +127,6 @@ const emptyTabText = computed(
   () =>
     ({
       import: "Nothing left to import here.",
-      working: "Nothing importing right now.",
       imported: "None of these are in 5Stack yet.",
       others: "",
     })[listTab.value],

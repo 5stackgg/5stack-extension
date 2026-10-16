@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { ArrowUpRight, CircleCheck, Loader2 } from "lucide-vue-next";
+import { ArrowUpRight, CircleCheck } from "lucide-vue-next";
+import ProgressRing from "./ui/ProgressRing.vue";
 import type { Candidate } from "@/lib/candidates";
 import { mapLabel } from "@/lib/candidates";
 import type { Lookup } from "@/lib/panel";
@@ -66,8 +67,16 @@ const note = computed(() => {
     return { text: props.progress, tone: "text-[hsl(var(--tac-amber))]" };
   }
   if (mode.value === "working") {
+    const lookup = props.lookup;
     return {
-      text: props.lookup?.state === "importing" ? "Importing" : "Queued",
+      text:
+        lookup?.stage === "downloading"
+          ? `Downloading ${lookup.progress ?? 0}%`
+          : lookup?.stage === "processing"
+            ? "Processing the demo"
+            : lookup?.state === "importing"
+              ? "Importing"
+              : "Queued",
       tone: "text-[hsl(var(--tac-amber))]",
     };
   }
@@ -111,9 +120,12 @@ const note = computed(() => {
       :aria-label="`Select ${maps}`"
       @change="$emit('toggle')"
     />
-    <Loader2
+    <ProgressRing
       v-else-if="mode === 'working'"
-      class="mt-0.5 size-4 shrink-0 animate-spin text-[hsl(var(--tac-amber))] motion-reduce:animate-none"
+      class="mt-px"
+      :progress="
+        !progress && lookup?.stage === 'downloading' ? lookup.progress : undefined
+      "
     />
     <CircleCheck v-else class="mt-0.5 size-4 shrink-0 text-success" />
 
