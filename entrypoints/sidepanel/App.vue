@@ -22,6 +22,7 @@ import { activeTab } from "@/lib/tabs";
 type Phase = "loading" | "setup" | "login" | "ready";
 
 const LOOKUP_BATCH = 50;
+const VALVE_BATCH = 20;
 const POLL_MS = 5_000;
 
 const origin = ref("");
@@ -45,6 +46,7 @@ const submitted = new Set<string>();
 const retried = new Set<string>();
 let discoverRun = 0;
 let poll: ReturnType<typeof setInterval> | undefined;
+let signing: Promise<unknown> = Promise.resolve();
 
 const pageTitle = computed(() => {
   switch (page.value.site) {
@@ -146,7 +148,9 @@ async function refreshPage(force = false) {
     }
     candidates.value = found;
     await lookupAll();
-    selectNew();
+    if (run === discoverRun) {
+      selectNew();
+    }
   } catch (error) {
     if (run === discoverRun) {
       discoverProblem.value = (error as Error).message;
@@ -159,27 +163,20 @@ async function refreshPage(force = false) {
 }
 
 async function lookupAll() {
-  const faceit = candidates.value.filter((c) => c.source === "faceit");
-  const valve = candidates.value.filter((c) => c.source === "valve");
-
-  for (let offset = 0; ; offset += LOOKUP_BATCH) {
-    const faceitBatch = faceit.slice(offset, offset + LOOKUP_BATCH);
-    const valveBatch = valve.slice(
-      offset,
-      offset + LOOKUP_BATCH - faceitBatch.length,
-    );
-    if (faceitBatch.length === 0 && valveBatch.length === 0) {
-      break;
-    }
+  const listed = candidates.value;
+  for (let offset = 0; offset < listed.length; offset += LOOKUP_BATCH) {
+    const batch = listed.slice(offset, offset + LOOKUP_BATCH);
+    const faceit = batch.filter((c) => c.source === "faceit");
+    const valve = batch.filter((c) => c.source === "valve");
     const result = await panel.lookup(origin.value, {
-      faceit: faceitBatch.map((c) => ({ id: c.id, maps: c.maps })),
-      valve: valveBatch.map((c) => c.id),
+      faceit: faceit.map((c) => ({ id: c.id, maps: c.maps })),
+      valve: valve.map((c) => c.id),
     });
     const next = { ...lookups.value };
-    for (const candidate of faceitBatch) {
+    for (const candidate of faceit) {
       next[candidate.key] = result.faceit[candidate.id] ?? { state: "none" };
     }
-    for (const candidate of valveBatch) {
+    for (const candidate of valve) {
       next[candidate.key] = result.valve[candidate.id] ?? { state: "none" };
     }
     lookups.value = next;
@@ -187,21 +184,30 @@ async function lookupAll() {
 
   // FACEIT signs a link for five minutes. One that ran out before the panel
   // started downloading gets signed again, once.
-  for (const candidate of faceit) {
+  for (const candidate of listed) {
     const lookup = lookups.value[candidate.key];
     if (
+      candidate.source === "faceit" &&
       lookup?.state === "failed" &&
       lookup.reason === "link expired" &&
       submitted.has(candidate.key) &&
       !retried.has(candidate.key)
     ) {
       retried.add(candidate.key);
-      void importFaceit(candidate);
+      void importFaceit(candidate).catch(() => undefined);
     }
   }
 }
 
-async function importFaceit(candidate: Candidate) {
+// One FACEIT check at a time: an automatic re-sign and a manual import would
+// otherwise render two Turnstile widgets in the same tab.
+function importFaceit(candidate: Candidate): Promise<void> {
+  const run = signing.then(() => signAndSend(candidate));
+  signing = run.catch(() => undefined);
+  return run;
+}
+
+async function signAndSend(candidate: Candidate) {
   submitted.add(candidate.key);
   delete errors.value[candidate.key];
   try {
@@ -238,21 +244,29 @@ async function importSelected() {
         progress.value = { ...progress.value, [candidate.key]: "Sending to 5Stack" };
       }
       try {
-        const result = await panel.importValve(
-          origin.value,
-          valve.map((c) => c.id),
-        );
-        const next = { ...lookups.value };
-        for (const candidate of valve) {
-          next[candidate.key] = result.valve[candidate.id] ?? { state: "none" };
-        }
-        lookups.value = next;
-      } catch (error) {
-        for (const candidate of valve) {
-          errors.value = {
-            ...errors.value,
-            [candidate.key]: (error as Error).message,
-          };
+        for (let offset = 0; offset < valve.length; offset += VALVE_BATCH) {
+          const batch = valve.slice(offset, offset + VALVE_BATCH);
+          try {
+            const result = await panel.importValve(
+              origin.value,
+              batch.map((c) => c.id),
+            );
+            const next = { ...lookups.value };
+            for (const candidate of batch) {
+              next[candidate.key] = result.valve[candidate.id] ?? {
+                state: "none",
+              };
+            }
+            lookups.value = next;
+          } catch (error) {
+            for (const candidate of valve.slice(offset)) {
+              errors.value = {
+                ...errors.value,
+                [candidate.key]: (error as Error).message,
+              };
+            }
+            break;
+          }
         }
       } finally {
         const rest = { ...progress.value };
@@ -307,9 +321,10 @@ onMounted(async () => {
         .catch(() => undefined);
       return;
     }
-    const waiting = Object.values(lookups.value).some(
-      (lookup) => lookup.state === "queued" || lookup.state === "importing",
-    );
+    const waiting = candidates.value.some((candidate) => {
+      const state = lookups.value[candidate.key]?.state;
+      return state === "queued" || state === "importing";
+    });
     if (phase.value === "ready" && waiting && !importing.value) {
       void lookupAll().catch(() => undefined);
     }

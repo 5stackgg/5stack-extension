@@ -10,7 +10,7 @@ import {
 import { leetifyMatchCandidates, leetifyProfileCandidates } from "./leetify";
 import type { Page } from "./page";
 import { panel } from "./panel";
-import { faceitTab, inTab } from "./tabs";
+import { closeTab, faceitTab, inTab, openFaceitRoom, showTab } from "./tabs";
 
 async function faceit<T>(tabId: number, path: string): Promise<T> {
   const result = await inTab(tabId, faceitGet, [path]);
@@ -57,28 +57,46 @@ export async function discover(
   return [];
 }
 
+// A tab opened for the import is closed once it worked, and brought forward
+// when it did not, since FACEIT's check may be waiting there for a click.
 export async function importFaceitMatch(
   origin: string,
   matchId: string,
   onStep: (map: number, maps: number) => void,
 ): Promise<number> {
-  const { tabId } = await faceitTab(matchId);
-  const room = await faceit<{ payload?: FaceitRoomPayload }>(
-    tabId,
-    `/api/match/v2/match/${matchId}`,
-  );
-  const demos = (room.payload?.demoURLs ?? []).filter(Boolean);
-  if (room.payload?.state !== "FINISHED" || demos.length === 0) {
-    throw new Error("FACEIT has no demo for this match yet.");
-  }
-
-  for (const [index, resourceUrl] of demos.entries()) {
-    onStep(index + 1, demos.length);
-    const signed = await inTab(tabId, faceitSign, [resourceUrl]);
-    if (!signed.ok) {
-      throw new Error(signed.error);
+  let { tabId, opened } = await faceitTab(matchId);
+  try {
+    const room = await faceit<{ payload?: FaceitRoomPayload }>(
+      tabId,
+      `/api/match/v2/match/${matchId}`,
+    );
+    const demos = (room.payload?.demoURLs ?? []).filter(Boolean);
+    if (room.payload?.state !== "FINISHED" || demos.length === 0) {
+      throw new Error("FACEIT has no demo for this match yet.");
     }
-    await panel.importFaceit(origin, { match_id: matchId, url: signed.value });
+
+    for (const [index, resourceUrl] of demos.entries()) {
+      onStep(index + 1, demos.length);
+      let signed = await inTab(tabId, faceitSign, [resourceUrl]);
+      if (!signed.ok && signed.noCheck && !opened) {
+        tabId = await openFaceitRoom(matchId);
+        opened = true;
+        signed = await inTab(tabId, faceitSign, [resourceUrl]);
+      }
+      if (!signed.ok) {
+        throw new Error(signed.error);
+      }
+      await panel.importFaceit(origin, { match_id: matchId, url: signed.value });
+    }
+
+    if (opened) {
+      await closeTab(tabId);
+    }
+    return demos.length;
+  } catch (error) {
+    if (opened) {
+      await showTab(tabId);
+    }
+    throw error;
   }
-  return demos.length;
 }

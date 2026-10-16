@@ -57,7 +57,7 @@ describe("roomCandidate", () => {
 });
 
 describe("historyCandidates", () => {
-  it("folds a series' per-map rows into one match and drops wingman", () => {
+  it("folds a series' per-map rows into one match and drops wingman and bad ids", () => {
     const candidates = historyCandidates([
       {
         matchId: "1-aaaaaaaa-0000-0000-0000-000000000000",
@@ -86,6 +86,13 @@ describe("historyCandidates", () => {
         date: 1791820000000,
         i1: "de_vertigo",
         gameMode: "2v2",
+        matchRound: "1",
+      },
+      {
+        matchId: "not-a-room-id",
+        date: 1791810000000,
+        i1: "de_train",
+        gameMode: "5v5",
         matchRound: "1",
       },
     ]);

@@ -2,7 +2,7 @@ import { type Candidate, faceitCandidate } from "./candidates";
 
 export type FaceitResult<T> =
   | { ok: true; value: T }
-  | { ok: false; error: string };
+  | { ok: false; error: string; noCheck?: boolean };
 
 // faceitGet and faceitSign are handed to chrome.scripting.executeScript and run
 // inside a faceit.com tab, so each must stand alone: nothing from this module's
@@ -43,18 +43,11 @@ export async function faceitSign(
   }
 
   if (!page.turnstile) {
-    try {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src =
-          "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    } catch {
-      return { ok: false, error: "could not load FACEIT's check" };
-    }
+    return {
+      ok: false,
+      noCheck: true,
+      error: "FACEIT's check is not on this page. Open the match on FACEIT.",
+    };
   }
 
   const host = document.createElement("div");
@@ -117,6 +110,9 @@ export async function faceitSign(
     host.remove();
   }
 }
+
+const MATCH_ID =
+  /^1-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type FaceitTeam = { name?: string };
 
@@ -185,7 +181,7 @@ export function historyCandidates(
 ): Array<Candidate> {
   const byMatch = new Map<string, Array<FaceitHistoryRow>>();
   for (const row of rows) {
-    if (!row.matchId || row.gameMode !== "5v5") {
+    if (!row.matchId || !MATCH_ID.test(row.matchId) || row.gameMode !== "5v5") {
       continue;
     }
     const id = row.matchId.toLowerCase();
