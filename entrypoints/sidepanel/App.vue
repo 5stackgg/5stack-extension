@@ -26,7 +26,10 @@ import { anyFaceitTab, showUnimported, unimported } from "@/lib/badge";
 type Phase = "loading" | "setup" | "error" | "login" | "ready";
 
 const LOOKUP_BATCH = 50;
-const VALVE_BATCH = 20;
+// One import runs at a time, from a batch of at most ten, so a long history
+// never floods the player's panel or their own connection.
+const MAX_BATCH = 10;
+const IMPORT_TIMEOUT_MS = 15 * 60 * 1000;
 const POLL_MS = 3_000;
 
 const origin = ref(DEFAULT_PANEL);
@@ -55,6 +58,9 @@ const pageLoading = ref(false);
 const pageProblem = ref<string | null>(null);
 
 const lookups = ref<Record<string, Lookup>>({});
+const queue = ref<Array<string>>([]);
+const queueTotal = ref(0);
+const queueDone = ref(0);
 const progress = ref<Record<string, string>>({});
 const errors = ref<Record<string, string>>({});
 const selected = ref(new Set<string>());
@@ -207,17 +213,40 @@ const selectedVisible = computed(
     ).length,
 );
 
+const roomLeft = computed(() =>
+  Math.max(0, MAX_BATCH - queue.value.length - selectedCandidates.value.length),
+);
+
+const allTicked = computed(
+  () =>
+    selectedVisible.value > 0 &&
+    (selectedVisible.value === selectableVisible.value.length ||
+      roomLeft.value === 0),
+);
+
 function toggleAll() {
   const next = new Set(selected.value);
-  const everything = selectedVisible.value === selectableVisible.value.length;
-  for (const candidate of selectableVisible.value) {
-    if (everything) {
+  if (allTicked.value) {
+    for (const candidate of selectableVisible.value) {
       next.delete(candidate.key);
-    } else {
-      next.add(candidate.key);
+    }
+  } else {
+    let room = roomLeft.value;
+    for (const candidate of selectableVisible.value) {
+      if (room > 0 && !next.has(candidate.key)) {
+        next.add(candidate.key);
+        room--;
+      }
     }
   }
   selected.value = next;
+}
+
+function tickable(candidate: Candidate): boolean {
+  return (
+    selectable(candidate) &&
+    (selected.value.has(candidate.key) || roomLeft.value > 0)
+  );
 }
 
 const emptyTabText = computed(
@@ -252,17 +281,22 @@ function toggle(candidate: Candidate) {
   const next = new Set(selected.value);
   if (next.has(candidate.key)) {
     next.delete(candidate.key);
-  } else {
+  } else if (roomLeft.value > 0) {
     next.add(candidate.key);
   }
   selected.value = next;
 }
 
 function selectNew(list: Array<Candidate>) {
-  selected.value = new Set([
-    ...selected.value,
-    ...list.filter(selectable).map((candidate) => candidate.key),
-  ]);
+  const next = new Set(selected.value);
+  let room = roomLeft.value;
+  for (const candidate of list.filter(selectable)) {
+    if (room > 0 && !next.has(candidate.key)) {
+      next.add(candidate.key);
+      room--;
+    }
+  }
+  selected.value = next;
 }
 
 function settleTab() {
@@ -483,64 +517,98 @@ async function signAndSend(candidate: Candidate) {
   }
 }
 
-async function importSelected() {
-  const chosen = selectedCandidates.value;
-  selected.value = new Set();
-  importing.value = true;
+function clearProgress(key: string) {
+  const { [key]: _, ...rest } = progress.value;
+  progress.value = rest;
+}
 
+function findCandidate(key: string): Candidate | undefined {
+  return [...ownList.value, ...pageList.value].find(
+    (candidate) => candidate.key === key,
+  );
+}
+
+function importSelected() {
+  const chosen = selectedCandidates.value.slice(
+    0,
+    Math.max(0, MAX_BATCH - queue.value.length),
+  );
+  selected.value = new Set();
+  for (const candidate of chosen) {
+    delete errors.value[candidate.key];
+    progress.value = { ...progress.value, [candidate.key]: "In line" };
+  }
+  queue.value = [...queue.value, ...chosen.map((candidate) => candidate.key)];
+  queueTotal.value += chosen.length;
+  if (!importing.value) {
+    void runQueue();
+  }
+}
+
+async function sendOne(candidate: Candidate) {
+  if (candidate.source === "faceit") {
+    await importFaceit(candidate);
+    return;
+  }
+  progress.value = { ...progress.value, [candidate.key]: "Sending to 5Stack" };
+  const result = await panel.importValve(origin.value, [candidate.id]);
+  lookups.value = {
+    ...lookups.value,
+    [candidate.key]: result.valve[candidate.id] ?? { state: "none" },
+  };
+}
+
+// The next import starts only once 5Stack is done with this one, imported or
+// failed, so a batch never downloads more than one demo at a time.
+async function waitUntilDone(candidate: Candidate) {
+  clearProgress(candidate.key);
+  const deadline = Date.now() + IMPORT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const state = lookups.value[candidate.key]?.state;
+    if (state !== "queued" && state !== "importing") {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    await lookupAll([candidate]).catch(() => undefined);
+  }
+}
+
+async function runQueue() {
+  importing.value = true;
   try {
-    const valve = chosen.filter((c) => c.source === "valve");
-    if (valve.length > 0) {
-      for (const candidate of valve) {
-        delete errors.value[candidate.key];
-        progress.value = { ...progress.value, [candidate.key]: "Sending to 5Stack" };
+    while (queue.value.length > 0) {
+      const [key, ...rest] = queue.value;
+      queue.value = rest;
+      const candidate = key ? findCandidate(key) : undefined;
+      if (!key || !candidate) {
+        if (key) {
+          clearProgress(key);
+        }
+        continue;
       }
       try {
-        for (let offset = 0; offset < valve.length; offset += VALVE_BATCH) {
-          const batch = valve.slice(offset, offset + VALVE_BATCH);
-          try {
-            const result = await panel.importValve(
-              origin.value,
-              batch.map((c) => c.id),
-            );
-            const next = { ...lookups.value };
-            for (const candidate of batch) {
-              next[candidate.key] = result.valve[candidate.id] ?? {
-                state: "none",
-              };
-            }
-            lookups.value = next;
-          } catch (error) {
-            for (const candidate of valve.slice(offset)) {
-              errors.value = {
-                ...errors.value,
-                [candidate.key]: (error as Error).message,
-              };
-            }
-            break;
+        await sendOne(candidate);
+        await waitUntilDone(candidate);
+      } catch (error) {
+        const message = (error as Error).message;
+        errors.value = { ...errors.value, [key]: message };
+        if (error instanceof PanelError && error.status === 429) {
+          for (const waiting of queue.value) {
+            clearProgress(waiting);
+            errors.value = { ...errors.value, [waiting]: message };
           }
+          queue.value = [];
         }
       } finally {
-        const rest = { ...progress.value };
-        valve.forEach((candidate) => delete rest[candidate.key]);
-        progress.value = rest;
+        clearProgress(key);
+        queueDone.value++;
+        updateBadge();
       }
     }
-
-    for (const candidate of chosen.filter((c) => c.source === "faceit")) {
-      try {
-        await importFaceit(candidate);
-      } catch (error) {
-        if (error instanceof PanelError && error.status === 429) {
-          break;
-        }
-      }
-    }
-
-    await lookupAll();
   } finally {
     importing.value = false;
-    updateBadge();
+    queueTotal.value = 0;
+    queueDone.value = 0;
   }
 }
 
@@ -687,19 +755,23 @@ onBeforeUnmount(() => {
               <input
                 type="checkbox"
                 class="size-4 cursor-pointer accent-[hsl(var(--tac-amber))]"
-                :checked="selectedVisible === selectableVisible.length"
-                :indeterminate="
-                  selectedVisible > 0 &&
-                  selectedVisible < selectableVisible.length
-                "
+                :checked="allTicked"
+                :indeterminate="selectedVisible > 0 && !allTicked"
                 @change="toggleAll"
               />
               <span>
                 {{
                   selectedVisible === 0
-                    ? "Select All"
+                    ? selectableVisible.length > MAX_BATCH
+                      ? `Select ${MAX_BATCH} Newest`
+                      : "Select All"
                     : `${selectedVisible} of ${selectableVisible.length} selected`
                 }}
+                <span
+                  v-if="selectableVisible.length > MAX_BATCH"
+                  class="text-muted-foreground/60"
+                  >· {{ MAX_BATCH }} at a time</span
+                >
               </span>
             </label>
             <span v-else />
@@ -789,7 +861,7 @@ onBeforeUnmount(() => {
                 :progress="progress[candidate.key]"
                 :error="errors[candidate.key]"
                 :disabled-reason="disabledReason(candidate)"
-                :selectable="selectable(candidate)"
+                :selectable="tickable(candidate)"
                 :selected="selected.has(candidate.key)"
                 :origin="origin"
                 :tag="pinned?.key === candidate.key ? 'This Match' : undefined"
@@ -809,13 +881,17 @@ onBeforeUnmount(() => {
         variant="tactical"
         class="w-full"
         :disabled="selectedCandidates.length === 0"
-        :loading="importing"
+        :loading="importing && selectedCandidates.length === 0"
         @click="importSelected"
       >
         {{
-          selectedCandidates.length === 0
-            ? "Import"
-            : `Import ${selectedCandidates.length} ${selectedCandidates.length === 1 ? "Match" : "Matches"}`
+          selectedCandidates.length > 0
+            ? importing
+              ? `Add ${selectedCandidates.length} to the Queue`
+              : `Import ${selectedCandidates.length} ${selectedCandidates.length === 1 ? "Match" : "Matches"}`
+            : importing
+              ? `Importing ${Math.min(queueDone + 1, queueTotal)} of ${queueTotal}`
+              : "Import"
         }}
       </Button>
     </footer>
