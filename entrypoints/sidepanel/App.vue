@@ -790,7 +790,7 @@ onBeforeUnmount(() => {
 
     <footer
       v-if="phase === 'ready' && candidates.length > 0"
-      class="sticky bottom-0 space-y-2 border-t border-border bg-background p-3"
+      class="sticky bottom-0 border-t border-border bg-background p-3"
     >
       <Button
         variant="tactical"
@@ -805,12 +805,6 @@ onBeforeUnmount(() => {
             : `Import ${selectedCandidates.length} ${selectedCandidates.length === 1 ? "Match" : "Matches"}`
         }}
       </Button>
-      <p
-        v-if="selectedCandidates.some((c) => c.source === 'faceit')"
-        class="text-center text-[0.7rem] text-muted-foreground"
-      >
-        FACEIT demos are signed in a FACEIT tab, one at a time.
-      </p>
     </footer>
   </div>
 </template>
