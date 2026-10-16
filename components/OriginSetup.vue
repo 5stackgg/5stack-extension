@@ -4,10 +4,10 @@ import { browser } from "wxt/browser";
 import { normalizePanelOrigin, originPermission } from "@/lib/panel";
 import Button from "./ui/Button.vue";
 
-const props = defineProps<{ initial: string; error?: string | null }>();
-const emit = defineEmits<{ connect: [origin: string] }>();
+defineProps<{ error?: string | null }>();
+const emit = defineEmits<{ connect: [origin: string]; cancel: [] }>();
 
-const input = ref(props.initial.replace(/^https:\/\//, ""));
+const input = ref("");
 const problem = ref<string | null>(null);
 const connecting = ref(false);
 
@@ -46,11 +46,11 @@ function connect() {
         class="mb-2 inline-flex items-center gap-2 font-sans text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground"
       >
         <span class="inline-block h-[2px] w-[10px] bg-[hsl(var(--tac-amber))]" />
-        Your Panel
+        Add a Panel
       </div>
       <p class="text-[0.85rem] text-muted-foreground">
-        The 5Stack panel matches are imported into. You stay signed in with
-        your normal 5Stack login.
+        For a self-hosted 5Stack panel. You stay signed in with your normal
+        login on that panel, and can switch back from the address at the top.
       </p>
     </div>
     <input
@@ -59,7 +59,7 @@ function connect() {
       inputmode="url"
       autocomplete="url"
       spellcheck="false"
-      placeholder="5stack.gg"
+      placeholder="panel.example.com"
       aria-label="Panel address"
       class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     />
@@ -69,5 +69,12 @@ function connect() {
     <Button type="submit" variant="tactical" class="w-full" :loading="connecting">
       Connect
     </Button>
+    <button
+      type="button"
+      class="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+      @click="emit('cancel')"
+    >
+      Cancel
+    </button>
   </form>
 </template>

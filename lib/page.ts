@@ -1,8 +1,10 @@
 export type Page =
   | { site: "faceit"; kind: "room"; matchId: string }
   | { site: "faceit"; kind: "player"; nickname: string }
+  | { site: "faceit"; kind: "home" }
   | { site: "leetify"; kind: "profile"; steamId: string }
   | { site: "leetify"; kind: "match"; gameId: string }
+  | { site: "leetify"; kind: "home" }
   | { site: "none" };
 
 const FACEIT_ROOM =
@@ -34,6 +36,7 @@ export function pageFromUrl(input: string | undefined): Page {
         nickname: decodeURIComponent(nickname),
       };
     }
+    return { site: "faceit", kind: "home" };
   }
 
   if (url.hostname === "leetify.com" || url.hostname === "www.leetify.com") {
@@ -45,6 +48,7 @@ export function pageFromUrl(input: string | undefined): Page {
     if (gameId) {
       return { site: "leetify", kind: "match", gameId: gameId.toLowerCase() };
     }
+    return { site: "leetify", kind: "home" };
   }
 
   return { site: "none" };

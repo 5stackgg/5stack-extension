@@ -11,21 +11,25 @@ import type { Candidate } from "@/lib/candidates";
 import { discover, importFaceitMatch } from "@/lib/discover";
 import { type Page, pageFromUrl, samePage } from "@/lib/page";
 import {
+  DEFAULT_PANEL,
   type Lookup,
   PanelError,
   type PanelUser,
   panel,
   panelOrigin,
+  savedPanels,
 } from "@/lib/panel";
 import { activeTab } from "@/lib/tabs";
 
-type Phase = "loading" | "setup" | "login" | "ready";
+type Phase = "loading" | "setup" | "error" | "login" | "ready";
 
 const LOOKUP_BATCH = 50;
 const VALVE_BATCH = 20;
 const POLL_MS = 5_000;
 
 const origin = ref("");
+const panels = ref<Array<string>>([DEFAULT_PANEL]);
+const version = browser.runtime.getManifest().version;
 const phase = ref<Phase>("loading");
 const user = ref<PanelUser | null>(null);
 const panelProblem = ref<string | null>(null);
@@ -51,10 +55,19 @@ let signing: Promise<unknown> = Promise.resolve();
 const pageTitle = computed(() => {
   switch (page.value.site) {
     case "faceit":
-      return page.value.kind === "room"
-        ? "FACEIT Match"
-        : `FACEIT · ${page.value.nickname}`;
+      if (page.value.kind === "room") {
+        return "FACEIT Match";
+      }
+      if (page.value.kind === "home") {
+        return user.value?.faceit?.nickname
+          ? `FACEIT · ${user.value.faceit.nickname}`
+          : "Your FACEIT Matches";
+      }
+      return `FACEIT · ${page.value.nickname}`;
     case "leetify":
+      if (page.value.kind === "home") {
+        return "Your Leetify Matches";
+      }
       return page.value.kind === "profile" ? "Leetify Profile" : "Leetify Match";
     default:
       return "";
@@ -97,26 +110,70 @@ function selectNew() {
   );
 }
 
+// A new panel is only saved once it answers: logged in, or logged out (403)
+// and waiting for a login, both count.
 async function connect(next?: string) {
+  const target = next ?? origin.value;
+  phase.value = "loading";
+  panelProblem.value = null;
+
+  let me: PanelUser | null = null;
+  try {
+    me = await panel.me(target);
+  } catch (error) {
+    if (!(error instanceof PanelError && error.status === 403)) {
+      panelProblem.value = (error as Error).message;
+      phase.value = next ? "setup" : "error";
+      return;
+    }
+  }
+
   if (next) {
     origin.value = next;
     await panelOrigin.setValue(next);
-  }
-  phase.value = "loading";
-  panelProblem.value = null;
-  try {
-    user.value = await panel.me(origin.value);
-    phase.value = "ready";
-    await refreshPage(true);
-  } catch (error) {
-    user.value = null;
-    if (error instanceof PanelError && error.status === 403) {
-      phase.value = "login";
-    } else {
-      panelProblem.value = (error as Error).message;
-      phase.value = "setup";
+    if (!panels.value.includes(next)) {
+      panels.value = [...panels.value, next];
+      await savedPanels.setValue(panels.value);
     }
   }
+
+  user.value = me;
+  if (!me) {
+    phase.value = "login";
+    return;
+  }
+  phase.value = "ready";
+  await refreshPage(true);
+}
+
+function addPanel() {
+  panelProblem.value = null;
+  phase.value = "setup";
+}
+
+async function switchPanel(next: string) {
+  if (next !== origin.value) {
+    await connect(next);
+  }
+}
+
+async function removePanel(target: string) {
+  panels.value = panels.value.filter((candidate) => candidate !== target);
+  await savedPanels.setValue(panels.value);
+  if (target === origin.value) {
+    await connect(DEFAULT_PANEL);
+  }
+}
+
+function openPanel() {
+  void browser.tabs.create({ url: origin.value });
+}
+
+async function logout() {
+  await panel.logout(origin.value).catch(() => undefined);
+  user.value = null;
+  candidates.value = [];
+  phase.value = "login";
 }
 
 async function refreshPage(force = false) {
@@ -142,7 +199,7 @@ async function refreshPage(force = false) {
 
   discovering.value = true;
   try {
-    const found = await discover(next, tab?.id);
+    const found = await discover(next, tab?.id, user.value!);
     if (run !== discoverRun) {
       return;
     }
@@ -307,6 +364,10 @@ function onTabUpdated(
 
 onMounted(async () => {
   origin.value = await panelOrigin.getValue();
+  panels.value = await savedPanels.getValue();
+  if (!panels.value.includes(origin.value)) {
+    panels.value = [...panels.value, origin.value];
+  }
   browser.tabs.onActivated.addListener(onTabActivated);
   browser.tabs.onUpdated.addListener(onTabUpdated);
   poll = setInterval(() => {
@@ -342,9 +403,15 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex min-h-screen flex-col">
     <AppHeader
-      :origin="phase === 'setup' ? null : origin"
+      :origin="origin"
       :user="user"
-      @change-panel="phase = 'setup'"
+      :panels="panels"
+      :version="version"
+      @switch-panel="switchPanel"
+      @add-panel="addPanel"
+      @remove-panel="removePanel"
+      @open-panel="openPanel"
+      @logout="logout"
     />
 
     <main class="flex-1">
@@ -367,16 +434,24 @@ onBeforeUnmount(() => {
         <OriginSetup
           v-else-if="phase === 'setup'"
           key="setup"
-          :initial="origin"
           :error="panelProblem"
           @connect="connect"
+          @cancel="connect()"
         />
+
+        <div v-else-if="phase === 'error'" key="error" class="space-y-3 p-4">
+          <p class="text-sm text-destructive">{{ panelProblem }}</p>
+          <Button variant="outline" size="sm" @click="connect()">
+            <RotateCw />
+            Try Again
+          </Button>
+        </div>
 
         <LoginGate
           v-else-if="phase === 'login'"
           key="login"
           :origin="origin"
-          @change-panel="phase = 'setup'"
+          @change-panel="addPanel"
         />
 
         <div v-else-if="page.site === 'none'" key="none" class="p-4">

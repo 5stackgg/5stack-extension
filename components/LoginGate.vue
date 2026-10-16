@@ -36,7 +36,7 @@ function logIn() {
       class="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
       @click="$emit('change-panel')"
     >
-      Use a different panel
+      Use a self-hosted panel
     </button>
   </div>
 </template>

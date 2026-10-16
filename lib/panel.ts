@@ -8,6 +8,11 @@ export const panelOrigin = storage.defineItem<string>("local:panelOrigin", {
   fallback: DEFAULT_PANEL,
 });
 
+export const savedPanels = storage.defineItem<Array<string>>(
+  "local:savedPanels",
+  { fallback: [DEFAULT_PANEL] },
+);
+
 export type ImportState = "imported" | "queued" | "importing" | "failed" | "none";
 
 export type Lookup = {
@@ -23,6 +28,7 @@ export type PanelUser = {
   avatar_url: string | null;
   role: string;
   imports: { faceit: boolean; valve: boolean };
+  faceit: { player_id: string; nickname: string | null } | null;
 };
 
 export class PanelError extends Error {
@@ -77,6 +83,8 @@ async function call<T>(
 
 export const panel = {
   me: (origin: string) => call<PanelUser>(origin, "me"),
+  logout: (origin: string) =>
+    call<{ success: boolean }>(origin, "logout", {}),
   lookup: (
     origin: string,
     body: { faceit: Array<{ id: string; maps: number }>; valve: Array<string> },

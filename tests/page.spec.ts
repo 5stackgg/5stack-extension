@@ -42,11 +42,19 @@ describe("pageFromUrl", () => {
   });
 
   it.each([
+    ["https://www.faceit.com/en/home", "faceit"],
+    ["https://www.faceit.com/en/cs2/leaderboards", "faceit"],
+    ["https://leetify.com/app", "leetify"],
+    ["https://leetify.com/app/profile/notasteamid", "leetify"],
+  ])("treats %s as the player's own matches", (url, site) => {
+    expect(pageFromUrl(url)).toEqual({ site, kind: "home" });
+  });
+
+  it.each([
     undefined,
     "chrome://newtab/",
-    "https://www.faceit.com/en/home",
     "https://evil.example/en/cs2/room/" + ROOM,
-    "https://leetify.com/app/profile/notasteamid",
+    "https://faceit.com.evil.example/en/home",
   ])("ignores %s", (url) => {
     expect(pageFromUrl(url)).toEqual({ site: "none" });
   });

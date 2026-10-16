@@ -9,7 +9,7 @@ import {
 } from "./faceit";
 import { leetifyMatchCandidates, leetifyProfileCandidates } from "./leetify";
 import type { Page } from "./page";
-import { panel } from "./panel";
+import { panel, type PanelUser } from "./panel";
 import { closeTab, faceitTab, inTab, openFaceitRoom, showTab } from "./tabs";
 
 async function faceit<T>(tabId: number, path: string): Promise<T> {
@@ -20,9 +20,34 @@ async function faceit<T>(tabId: number, path: string): Promise<T> {
   return result.value as T;
 }
 
+async function faceitHistory(
+  tabId: number,
+  playerId: string,
+): Promise<Array<Candidate>> {
+  const rows = await faceit<Array<FaceitHistoryRow>>(
+    tabId,
+    `/api/stats/v1/stats/time/users/${playerId}/games/cs2?page=0&size=20`,
+  );
+  return historyCandidates(Array.isArray(rows) ? rows : []);
+}
+
+// Off a match or player page, the list is the signed-in player's own: their
+// FACEIT account as 5Stack knows it, else whoever is logged in to FACEIT.
+async function ownFaceitId(tabId: number, user: PanelUser) {
+  if (user.faceit?.player_id) {
+    return user.faceit.player_id;
+  }
+  const session = await faceit<{ payload?: { id?: string; guid?: string } }>(
+    tabId,
+    "/api/users/v1/sessions/me",
+  ).catch(() => null);
+  return session?.payload?.id ?? session?.payload?.guid ?? null;
+}
+
 export async function discover(
   page: Page,
   tabId: number | undefined,
+  user: PanelUser,
 ): Promise<Array<Candidate>> {
   if (page.site === "faceit" && tabId !== undefined) {
     if (page.kind === "room") {
@@ -34,21 +59,22 @@ export async function discover(
       return candidate ? [candidate] : [];
     }
 
-    const user = await faceit<{ payload?: { id?: string } }>(
+    if (page.kind === "home") {
+      const playerId = await ownFaceitId(tabId, user);
+      return playerId ? faceitHistory(tabId, playerId) : [];
+    }
+
+    const found = await faceit<{ payload?: { id?: string } }>(
       tabId,
       `/api/users/v1/nicknames/${encodeURIComponent(page.nickname)}`,
     );
-    if (!user.payload?.id) {
-      return [];
-    }
-    const rows = await faceit<Array<FaceitHistoryRow>>(
-      tabId,
-      `/api/stats/v1/stats/time/users/${user.payload.id}/games/cs2?page=0&size=20`,
-    );
-    return historyCandidates(Array.isArray(rows) ? rows : []);
+    return found.payload?.id ? faceitHistory(tabId, found.payload.id) : [];
   }
 
   if (page.site === "leetify") {
+    if (page.kind === "home") {
+      return leetifyProfileCandidates(user.steam_id);
+    }
     return page.kind === "profile"
       ? leetifyProfileCandidates(page.steamId)
       : leetifyMatchCandidates(page.gameId);
