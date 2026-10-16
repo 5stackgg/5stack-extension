@@ -136,35 +136,6 @@ type Tab = "import" | "imported";
 
 const listTab = ref<Tab>("import");
 
-type Source = Candidate["source"];
-
-const sources = ref(new Set<Source>(["faceit", "valve"]));
-
-const hasBothSources = computed(
-  () =>
-    candidates.value.some((c) => c.source === "faceit") &&
-    candidates.value.some((c) => c.source === "valve"),
-);
-
-const filteredCandidates = computed(() =>
-  hasBothSources.value
-    ? candidates.value.filter((candidate) => sources.value.has(candidate.source))
-    : candidates.value,
-);
-
-function toggleSource(source: Source) {
-  const next = new Set(sources.value);
-  if (next.has(source)) {
-    if (next.size === 1) {
-      return;
-    }
-    next.delete(source);
-  } else {
-    next.add(source);
-  }
-  sources.value = next;
-}
-
 // Imports in flight stay under To Import, with their progress on the row,
 // until they land under Imported.
 function tabOf(candidate: Candidate): Tab {
@@ -176,7 +147,7 @@ function tabOf(candidate: Candidate): Tab {
 
 const tabCounts = computed(() => {
   const counts: Record<Tab, number> = { import: 0, imported: 0 };
-  for (const candidate of filteredCandidates.value) {
+  for (const candidate of candidates.value) {
     counts[tabOf(candidate)]++;
   }
   return counts;
@@ -194,12 +165,10 @@ const tabModel = computed({
   },
 });
 
-const listKey = computed(() => `${listTab.value}:${[...sources.value].join(",")}`);
+const listKey = computed(() => listTab.value);
 
 const visibleCandidates = computed(() =>
-  filteredCandidates.value.filter(
-    (candidate) => tabOf(candidate) === listTab.value,
-  ),
+  candidates.value.filter((candidate) => tabOf(candidate) === listTab.value),
 );
 
 const selectableVisible = computed(() =>
@@ -743,14 +712,13 @@ onBeforeUnmount(() => {
             v-if="
               !listLoading &&
               !listProblem &&
-              (hasBothSources ||
-                (listTab === 'import' && selectableVisible.length > 0))
+              listTab === 'import' &&
+              selectableVisible.length > 0
             "
-            class="flex items-center justify-between gap-3 border-b border-border px-4 py-2"
+            class="border-b border-border px-4 py-2"
           >
             <label
-              v-if="listTab === 'import' && selectableVisible.length > 0"
-              class="flex cursor-pointer select-none items-center gap-3 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              class="flex cursor-pointer select-none items-center gap-3 whitespace-nowrap text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               <input
                 type="checkbox"
@@ -774,24 +742,6 @@ onBeforeUnmount(() => {
                 >
               </span>
             </label>
-            <span v-else />
-            <div v-if="hasBothSources" class="flex items-center gap-1">
-              <button
-                v-for="source in ['faceit', 'valve'] as const"
-                :key="source"
-                type="button"
-                :aria-pressed="sources.has(source)"
-                class="inline-flex h-6 items-center rounded-md border px-2 font-mono text-[0.6rem] uppercase leading-none tracking-[0.14em] transition-colors duration-150"
-                :class="
-                  sources.has(source)
-                    ? 'border-[hsl(var(--tac-amber)/0.55)] bg-[hsl(var(--tac-amber)/0.12)] text-[hsl(var(--tac-amber))]'
-                    : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                "
-                @click="toggleSource(source)"
-              >
-                {{ source === "faceit" ? "FACEIT" : "Valve" }}
-              </button>
-            </div>
           </div>
 
           <div v-if="listLoading" class="divide-y divide-border">
