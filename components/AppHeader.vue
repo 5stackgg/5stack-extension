@@ -35,7 +35,13 @@ defineEmits<{
   logout: [];
 }>();
 
-const hostOf = (origin: string) => new URL(origin).host;
+const hostOf = (origin: string) => {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return origin;
+  }
+};
 const host = computed(() => hostOf(props.origin));
 
 const menu =

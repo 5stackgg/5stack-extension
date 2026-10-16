@@ -27,7 +27,7 @@ const LOOKUP_BATCH = 50;
 const VALVE_BATCH = 20;
 const POLL_MS = 5_000;
 
-const origin = ref("");
+const origin = ref(DEFAULT_PANEL);
 const panels = ref<Array<string>>([DEFAULT_PANEL]);
 const version = browser.runtime.getManifest().version;
 const phase = ref<Phase>("loading");
