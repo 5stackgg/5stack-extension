@@ -51,6 +51,14 @@ async function call<T>(
     throw new PanelError(0, `Could not reach ${new URL(origin).host}.`);
   }
 
+  // A panel without the extension's routes answers with its web app's HTML.
+  if (!response.headers.get("content-type")?.includes("application/json")) {
+    throw new PanelError(
+      404,
+      "This panel does not support the extension yet. It needs a 5Stack update.",
+    );
+  }
+
   if (!response.ok) {
     const error = (await response.json().catch(() => null)) as {
       message?: unknown;
