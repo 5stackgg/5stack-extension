@@ -134,6 +134,35 @@ type Tab = "import" | "imported";
 
 const listTab = ref<Tab>("import");
 
+type Source = Candidate["source"];
+
+const sources = ref(new Set<Source>(["faceit", "valve"]));
+
+const hasBothSources = computed(
+  () =>
+    candidates.value.some((c) => c.source === "faceit") &&
+    candidates.value.some((c) => c.source === "valve"),
+);
+
+const filteredCandidates = computed(() =>
+  hasBothSources.value
+    ? candidates.value.filter((candidate) => sources.value.has(candidate.source))
+    : candidates.value,
+);
+
+function toggleSource(source: Source) {
+  const next = new Set(sources.value);
+  if (next.has(source)) {
+    if (next.size === 1) {
+      return;
+    }
+    next.delete(source);
+  } else {
+    next.add(source);
+  }
+  sources.value = next;
+}
+
 // Imports in flight stay under To Import, with their progress on the row,
 // until they land under Imported.
 function tabOf(candidate: Candidate): Tab {
@@ -145,7 +174,7 @@ function tabOf(candidate: Candidate): Tab {
 
 const tabCounts = computed(() => {
   const counts: Record<Tab, number> = { import: 0, imported: 0 };
-  for (const candidate of candidates.value) {
+  for (const candidate of filteredCandidates.value) {
     counts[tabOf(candidate)]++;
   }
   return counts;
@@ -164,8 +193,34 @@ const tabModel = computed({
 });
 
 const visibleCandidates = computed(() =>
-  candidates.value.filter((candidate) => tabOf(candidate) === listTab.value),
+  filteredCandidates.value.filter(
+    (candidate) => tabOf(candidate) === listTab.value,
+  ),
 );
+
+const selectableVisible = computed(() =>
+  visibleCandidates.value.filter(selectable),
+);
+
+const selectedVisible = computed(
+  () =>
+    selectableVisible.value.filter((candidate) =>
+      selected.value.has(candidate.key),
+    ).length,
+);
+
+function toggleAll() {
+  const next = new Set(selected.value);
+  const everything = selectedVisible.value === selectableVisible.value.length;
+  for (const candidate of selectableVisible.value) {
+    if (everything) {
+      next.delete(candidate.key);
+    } else {
+      next.add(candidate.key);
+    }
+  }
+  selected.value = next;
+}
 
 const emptyTabText = computed(
   () =>
@@ -616,6 +671,57 @@ onBeforeUnmount(() => {
             class="border-b border-border px-4 py-2.5"
           >
             <AnimatedFilters v-model="tabModel" :options="tabOptions" />
+          </div>
+
+          <div
+            v-if="
+              !listLoading &&
+              !listProblem &&
+              (hasBothSources ||
+                (listTab === 'import' && selectableVisible.length > 0))
+            "
+            class="flex items-center justify-between gap-3 border-b border-border px-4 py-2"
+          >
+            <label
+              v-if="listTab === 'import' && selectableVisible.length > 0"
+              class="flex cursor-pointer select-none items-center gap-3 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <input
+                type="checkbox"
+                class="size-4 cursor-pointer accent-[hsl(var(--tac-amber))]"
+                :checked="selectedVisible === selectableVisible.length"
+                :indeterminate="
+                  selectedVisible > 0 &&
+                  selectedVisible < selectableVisible.length
+                "
+                @change="toggleAll"
+              />
+              <span>
+                {{
+                  selectedVisible === 0
+                    ? "Select All"
+                    : `${selectedVisible} of ${selectableVisible.length} selected`
+                }}
+              </span>
+            </label>
+            <span v-else />
+            <div v-if="hasBothSources" class="flex items-center gap-1">
+              <button
+                v-for="source in ['faceit', 'valve'] as const"
+                :key="source"
+                type="button"
+                :aria-pressed="sources.has(source)"
+                class="inline-flex h-6 items-center rounded-md border px-2 font-mono text-[0.6rem] uppercase leading-none tracking-[0.14em] transition-colors duration-150"
+                :class="
+                  sources.has(source)
+                    ? 'border-[hsl(var(--tac-amber)/0.55)] bg-[hsl(var(--tac-amber)/0.12)] text-[hsl(var(--tac-amber))]'
+                    : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                "
+                @click="toggleSource(source)"
+              >
+                {{ source === "faceit" ? "FACEIT" : "Valve" }}
+              </button>
+            </div>
           </div>
 
           <div v-if="listLoading" class="divide-y divide-border">

@@ -26,13 +26,14 @@ describe("roomCandidate", () => {
       }, "76561198000000002"),
     ).toEqual({
       own: true,
+      result: "loss",
       key: `faceit:${ROOM}`,
       source: "faceit",
       id: ROOM,
       maps: 1,
       mapNames: ["de_ancient"],
       finishedAt: "2026-10-05T23:17:49Z",
-      score: "13 : 8",
+      score: "8 : 13",
       title: "team_a vs team_b",
     });
   });
@@ -61,6 +62,73 @@ describe("roomCandidate", () => {
 });
 
 describe("historyCandidates", () => {
+  it("reads the player's result and stats from their history row", () => {
+    const [candidate] = historyCandidates(
+      [
+        {
+          matchId: "1-aaaaaaaa-0000-0000-0000-000000000000",
+          date: 1791851368000,
+          i1: "de_dust2",
+          i6: "14",
+          i7: "2",
+          i8: "19",
+          i10: "0",
+          i18: "11 / 13",
+          c4: "50",
+          c10: "59.9",
+          elo_delta: "-30",
+          gameMode: "5v5",
+          matchRound: "1",
+        },
+      ],
+      true,
+    );
+
+    expect(candidate).toMatchObject({
+      result: "loss",
+      score: "11 : 13",
+      stats: {
+        kills: 14,
+        deaths: 19,
+        assists: 2,
+        adr: 59.9,
+        headshotPercent: 50,
+        eloDelta: -30,
+      },
+    });
+  });
+
+  it("puts the player's rounds first on a win", () => {
+    const [candidate] = historyCandidates(
+      [
+        {
+          matchId: "1-aaaaaaaa-0000-0000-0000-000000000000",
+          i10: "1",
+          i18: "11 / 13",
+          gameMode: "5v5",
+        },
+      ],
+      true,
+    );
+
+    expect(candidate).toMatchObject({ result: "win", score: "13 : 11" });
+  });
+
+  it("falls back to the Elo change for the result", () => {
+    const [candidate] = historyCandidates(
+      [
+        {
+          matchId: "1-aaaaaaaa-0000-0000-0000-000000000000",
+          elo_delta: "25",
+          gameMode: "5v5",
+        },
+      ],
+      true,
+    );
+
+    expect(candidate?.result).toBe("win");
+  });
+
   it("folds a series' per-map rows into one match and drops wingman and bad ids", () => {
     const candidates = historyCandidates([
       {

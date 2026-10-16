@@ -1,4 +1,11 @@
-import { type Candidate, faceitCandidate, valveCandidate } from "./candidates";
+import {
+  type Candidate,
+  type MatchStats,
+  faceitCandidate,
+  number,
+  ownScore,
+  valveCandidate,
+} from "./candidates";
 
 const API = "https://api-public.cs-prod.leetify.com";
 const SHARE_CODE = /^CSGO(?:-[A-Za-z0-9]{5}){5}$/;
@@ -13,23 +20,81 @@ export type LeetifyMatch = {
   data_source_match_id?: string;
   map_name?: string;
   team_scores?: Array<{ team_number: number; score: number }>;
-  stats?: Array<{ steam64_id?: string }>;
+  stats?: Array<{
+    steam64_id?: string;
+    total_kills?: number;
+    total_deaths?: number;
+    total_assists?: number;
+    total_hs_kills?: number;
+    dpr?: number;
+    leetify_rating?: number;
+    rounds_won?: number;
+    rounds_lost?: number;
+  }>;
 };
+
+// The profile's own line in a match: Leetify lists only the owner's stats on a
+// profile's match list.
+function ownLine(match: LeetifyMatch, steamId?: string) {
+  const line = steamId
+    ? match.stats?.find((stat) => stat.steam64_id === steamId)
+    : match.stats?.[0];
+  if (!line) {
+    return { result: undefined, stats: undefined, score: undefined };
+  }
+  const won = number(line.rounds_won);
+  const lost = number(line.rounds_lost);
+  const result: Candidate["result"] =
+    won === undefined || lost === undefined
+      ? undefined
+      : won > lost
+        ? "win"
+        : won < lost
+          ? "loss"
+          : "tie";
+  const kills = number(line.total_kills);
+  const headshots = number(line.total_hs_kills);
+  const rating = number(line.leetify_rating);
+  const stats: MatchStats = {
+    kills,
+    deaths: number(line.total_deaths),
+    assists: number(line.total_assists),
+    adr: number(line.dpr),
+    headshotPercent:
+      kills && headshots !== undefined
+        ? Math.round((headshots / kills) * 100)
+        : undefined,
+    rating: rating === undefined ? undefined : rating * 100,
+  };
+  return {
+    result,
+    stats,
+    score:
+      won === undefined || lost === undefined
+        ? undefined
+        : ownScore([won, lost], result),
+  };
+}
 
 export function leetifyCandidate(
   match: LeetifyMatch,
   own: boolean,
+  steamId?: string,
 ): Candidate | null {
   const sourceId = match.data_source_match_id ?? "";
+  const line = ownLine(match, steamId);
   const fields = {
     own,
     mapNames: match.map_name ? [match.map_name] : [],
     finishedAt: match.finished_at ?? null,
     score:
-      match.team_scores?.length === 2
+      line.score ??
+      (match.team_scores?.length === 2
         ? match.team_scores.map((team) => team.score).join(" : ")
-        : null,
+        : null),
     title: null,
+    result: line.result,
+    stats: line.stats,
   };
 
   if (match.data_source === "faceit" && FACEIT_MATCH_ID.test(sourceId)) {
@@ -69,7 +134,7 @@ export async function leetifyProfileCandidates(
   viewer: string,
 ): Promise<Array<Candidate>> {
   const candidates = (await profileMatches(steamId))
-    .map((match) => leetifyCandidate(match, steamId === viewer))
+    .map((match) => leetifyCandidate(match, steamId === viewer, steamId))
     .filter((candidate): candidate is Candidate => candidate !== null);
   return candidates.slice(0, MAX_MATCHES);
 }
@@ -94,7 +159,7 @@ export async function leetifyMatchCandidates(
       (candidate) => candidate.id === gameId,
     );
     if (listed) {
-      const candidate = leetifyCandidate(listed, played);
+      const candidate = leetifyCandidate(listed, played, steamId);
       return candidate ? [candidate] : [];
     }
   }

@@ -1,4 +1,10 @@
-import { type Candidate, faceitCandidate } from "./candidates";
+import {
+  type Candidate,
+  type MatchStats,
+  faceitCandidate,
+  number,
+  ownScore,
+} from "./candidates";
 
 export type FaceitResult<T> =
   | { ok: true; value: T }
@@ -139,6 +145,13 @@ const MATCH_ID =
 
 type FaceitTeam = { name?: string; roster?: Array<{ gameId?: string }> };
 
+function rounds(score: string | undefined): [number, number] | null {
+  const parts = (score ?? "").split(/\s*[\/:]\s*/).map(Number);
+  return parts.length === 2 && parts.every(Number.isFinite)
+    ? [parts[0]!, parts[1]!]
+    : null;
+}
+
 export type FaceitRoomPayload = {
   id?: string;
   state?: string;
@@ -152,11 +165,21 @@ export type FaceitRoomPayload = {
   }>;
 };
 
+// FACEIT's per-map history row for one player. The stat keys are FACEIT's
+// own: i6 kills, i7 assists, i8 deaths, i10 won (1), i18 score, c4 headshot
+// percent, c10 damage per round.
 export type FaceitHistoryRow = {
   matchId?: string;
   date?: number;
   i1?: string;
+  i6?: string;
+  i7?: string;
+  i8?: string;
+  i10?: string;
   i18?: string;
+  c4?: string;
+  c10?: string;
+  elo_delta?: string;
   gameMode?: string;
   matchRound?: string;
 };
@@ -185,16 +208,30 @@ export function roomCandidate(
   }
 
   const teams = payload.teams;
-  const played = [teams?.faction1, teams?.faction2]
-    .flatMap((team) => team?.roster ?? [])
-    .some((player) => player.gameId === steamId);
+  const side = (["faction1", "faction2"] as const).find((faction) =>
+    teams?.[faction]?.roster?.some((player) => player.gameId === steamId),
+  );
+  const played = side !== undefined;
+  const mapsWon = side
+    ? results.filter((result) => result.winner === side).length
+    : 0;
+  const result: Candidate["result"] =
+    !side || results.length === 0
+      ? undefined
+      : mapsWon * 2 > results.length
+        ? "win"
+        : mapsWon * 2 < results.length
+          ? "loss"
+          : "tie";
+  const scored = score ? rounds(score) : null;
   return faceitCandidate({
     own: played,
+    result,
     id: payload.id.toLowerCase(),
     maps: demos.length,
     mapNames: payload.voting?.map?.pick ?? [],
     finishedAt: payload.finishedAt ?? null,
-    score,
+    score: scored && result ? ownScore(scored, result) : score,
     title:
       teams?.faction1?.name && teams?.faction2?.name
         ? `${teams.faction1.name} vs ${teams.faction2.name}`
@@ -223,14 +260,45 @@ export function historyCandidates(
     );
     const finished = Math.max(...ordered.map((map) => map.date ?? 0));
     const only = ordered.length === 1 ? ordered[0] : undefined;
+    const won = ordered.filter((map) => map.i10 === "1").length;
+    const eloDelta = ordered
+      .map((map) => number(map.elo_delta))
+      .find((delta) => delta !== undefined);
+    const result: Candidate["result"] = ordered.some((map) => map.i10 !== undefined)
+      ? won * 2 > ordered.length
+        ? "win"
+        : won * 2 < ordered.length
+          ? "loss"
+          : "tie"
+      : eloDelta === undefined
+        ? undefined
+        : eloDelta > 0
+          ? "win"
+          : "loss";
+    const sum = (key: "i6" | "i7" | "i8") =>
+      ordered.some((map) => number(map[key]) !== undefined)
+        ? ordered.reduce((total, map) => total + (number(map[key]) ?? 0), 0)
+        : undefined;
+    const stats: MatchStats = {
+      kills: sum("i6"),
+      deaths: sum("i8"),
+      assists: sum("i7"),
+      adr: only ? number(only.c10) : undefined,
+      headshotPercent: only ? number(only.c4) : undefined,
+      eloDelta,
+    };
+    const hasStats = Object.values(stats).some((value) => value !== undefined);
+    const scored = rounds(only?.i18);
     return faceitCandidate({
       own,
       id,
       maps: ordered.length,
       mapNames: ordered.map((map) => map.i1 ?? "").filter(Boolean),
       finishedAt: finished > 0 ? new Date(finished).toISOString() : null,
-      score: only?.i18 ? only.i18.replace(/\s*\/\s*/, " : ") : null,
+      score: scored ? ownScore(scored, result) : null,
       title: null,
+      result,
+      stats: hasStats ? stats : undefined,
     });
   });
 }

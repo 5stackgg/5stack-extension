@@ -48,6 +48,54 @@ const details = computed(() =>
   ].filter(Boolean),
 );
 
+const result = computed(() => {
+  switch (props.candidate.result) {
+    case "win":
+      return { letter: "W", tone: "bg-[hsl(var(--success)/0.15)] text-success" };
+    case "loss":
+      return { letter: "L", tone: "bg-[hsl(var(--destructive)/0.15)] text-destructive" };
+    case "tie":
+      return { letter: "T", tone: "bg-muted text-muted-foreground" };
+    default:
+      return null;
+  }
+});
+
+const signed = (value: number, digits = 0) =>
+  `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(digits)}`;
+
+const statLine = computed(() => {
+  const stats = props.candidate.stats;
+  if (!stats) {
+    return [];
+  }
+  const parts: Array<{ text: string; tone?: string }> = [];
+  if (stats.kills !== undefined && stats.deaths !== undefined) {
+    parts.push({
+      text: `${stats.kills}/${stats.deaths}/${stats.assists ?? 0}`,
+    });
+  }
+  if (stats.adr !== undefined) {
+    parts.push({ text: `ADR ${Math.round(stats.adr)}` });
+  }
+  if (stats.headshotPercent !== undefined) {
+    parts.push({ text: `${Math.round(stats.headshotPercent)}% HS` });
+  }
+  if (stats.rating !== undefined) {
+    parts.push({
+      text: `Leetify ${signed(stats.rating, 1)}`,
+      tone: stats.rating >= 0 ? "text-success" : "text-destructive",
+    });
+  }
+  if (stats.eloDelta !== undefined && stats.eloDelta !== 0) {
+    parts.push({
+      text: `${signed(stats.eloDelta)} Elo`,
+      tone: stats.eloDelta > 0 ? "text-success" : "text-destructive",
+    });
+  }
+  return parts;
+});
+
 const mode = computed(() => {
   const state = props.lookup?.state ?? "none";
   if (props.progress || state === "queued" || state === "importing") {
@@ -198,13 +246,31 @@ const note = computed(() => {
         </span>
         <span
           v-if="candidate.score"
-          class="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
-          >{{ candidate.score.replace(" : ", " – ") }}</span
+          class="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums"
         >
+          <span
+            v-if="result"
+            class="rounded-sm px-1 py-0.5 text-[0.6rem] font-bold leading-none"
+            :class="result.tone"
+            >{{ result.letter }}</span
+          >
+          <span :class="result ? 'text-foreground' : 'text-muted-foreground'">{{
+            candidate.score.replace(" : ", " – ")
+          }}</span>
+        </span>
       </div>
       <div class="mt-0.5 truncate text-xs text-muted-foreground">
         {{ details.join(" · ") }}
         <template v-if="candidate.title"> · {{ candidate.title }}</template>
+      </div>
+      <div
+        v-if="statLine.length"
+        class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[0.64rem] tabular-nums text-muted-foreground"
+      >
+        <template v-for="(part, index) in statLine" :key="part.text">
+          <span v-if="index" class="opacity-40">·</span>
+          <span :class="part.tone">{{ part.text }}</span>
+        </template>
       </div>
       <Transition
         mode="out-in"

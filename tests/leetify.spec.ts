@@ -53,6 +53,44 @@ describe("leetifyCandidate", () => {
     });
   });
 
+  it("reads the profile owner's result, score and stats", () => {
+    expect(
+      leetifyCandidate(
+        {
+          ...base,
+          data_source: "matchmaking",
+          data_source_match_id: "CSGO-Nacov-KbYev-J2EN9-3XS8v-8rP3A",
+          stats: [
+            {
+              steam64_id: "76561198034202275",
+              total_kills: 17,
+              total_deaths: 15,
+              total_assists: 5,
+              total_hs_kills: 2,
+              dpr: 86.85,
+              leetify_rating: 0.0447,
+              rounds_won: 7,
+              rounds_lost: 13,
+            },
+          ],
+        },
+        true,
+        "76561198034202275",
+      ),
+    ).toMatchObject({
+      result: "loss",
+      score: "7 : 13",
+      stats: {
+        kills: 17,
+        deaths: 15,
+        assists: 5,
+        adr: 86.85,
+        headshotPercent: 12,
+        rating: 4.47,
+      },
+    });
+  });
+
   it.each([
     ["hltv", "2399261-mibr-vs-bc-game-m3-inferno.dem"],
     ["esplay", "abc"],
