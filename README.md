@@ -46,8 +46,9 @@ storage.
 
 - `/extension` routed to the api on the web domain (5stack-panel).
 - **External matches** turned on in the panel's application settings.
-- FACEIT imports: **FACEIT import** turned on and a FACEIT Data API key
-  (`FACEIT_API_KEY`). The Downloads API approval is not needed.
+- FACEIT imports: a FACEIT Data API key (`FACEIT_API_KEY`), which the panel
+  uses to check each demo link. Neither the Downloads API approval nor the
+  **FACEIT import** switch (that one runs the automatic poller) is needed.
 - Valve imports: the Steam game coordinator configured, as for share codes.
 - Each user can import 30 demos an hour.
 
