@@ -18,12 +18,18 @@ const props = defineProps<{
 
 defineEmits<{ toggle: [] }>();
 
-const dateFormat = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
+const thisYear = new Date().getFullYear();
+
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() === thisYear ? {} : { year: "numeric" }),
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
 
 const maps = computed(() =>
   props.candidate.mapNames.length
@@ -35,9 +41,7 @@ const maps = computed(() =>
 
 const details = computed(() =>
   [
-    props.candidate.finishedAt
-      ? dateFormat.format(new Date(props.candidate.finishedAt))
-      : null,
+    props.candidate.finishedAt ? formatDate(props.candidate.finishedAt) : null,
     props.candidate.score,
     props.candidate.source === "faceit" ? "FACEIT" : "Valve",
   ].filter(Boolean),
