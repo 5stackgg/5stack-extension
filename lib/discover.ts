@@ -94,9 +94,19 @@ export async function discover(
     }
 
     const found = await faceit<{
-      payload?: { id?: string; games?: { cs2?: { game_player_id?: string } } };
+      payload?: {
+        id?: string;
+        nickname?: string;
+        games?: { cs2?: { game_player_id?: string } };
+      };
     }>(tabId, `/api/users/v1/nicknames/${encodeURIComponent(page.nickname)}`);
-    const own = found.payload?.games?.cs2?.game_player_id === user.steam_id;
+    const profile = found.payload;
+    const own =
+      (!!profile?.id && profile.id === user.faceit?.player_id) ||
+      (!!user.faceit?.nickname &&
+        (profile?.nickname ?? page.nickname).toLowerCase() ===
+          user.faceit.nickname.toLowerCase()) ||
+      profile?.games?.cs2?.game_player_id === user.steam_id;
     return found.payload?.id
       ? faceitHistory(tabId, found.payload.id, own)
       : [];
