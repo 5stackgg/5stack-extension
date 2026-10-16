@@ -1,0 +1,20 @@
+@import "@5stack/ui/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Oxanium";
+  src: url("./fonts/Oxanium-VariableFont_wght.ttf") format("truetype");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-background font-sans text-foreground antialiased;
+}

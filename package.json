@@ -1,0 +1,37 @@
+{
+  "name": "5stack-extension",
+  "description": "Import FACEIT and Leetify matches into your 5Stack panel.",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "@5stack/ui": "^0.2.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^0.508.0",
+    "reka-ui": "^2.9.7",
+    "tailwind-merge": "^3.2.0",
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@wxt-dev/module-vue": "^1.0.3",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.8.3",
+    "vite": "^8.3.4",
+    "vitest": "^4.1.12",
+    "vue-tsc": "3.3.12",
+    "wxt": "^0.21.4"
+  }
+}

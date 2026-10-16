@@ -1,0 +1,49 @@
+name: extension
+
+# Sends the extension to the Chrome Web Store when package.json names a
+# version the store has not had. Bumping `version` is the release; Chrome then
+# updates every install on its own once review passes. See
+# scripts/publish-extension.mjs.
+on:
+  push:
+    branches:
+      - "main"
+    paths:
+      - "package.json"
+      - "scripts/publish-extension.mjs"
+      - ".github/workflows/extension.yml"
+  # A version bumped while another was in review waits for it; this is what
+  # sends it once review clears. Off the hour, as GitHub asks.
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+# Never two at once, and never one cancelled mid-upload.
+concurrency:
+  group: extension
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    # Skipped rather than failing until the store's publisher id and item id
+    # are set as repository variables.
+    if: ${{ vars.CWS_PUBLISHER_ID != '' && vars.CWS_EXTENSION_ID != '' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Build the zip
+        run: yarn zip
+      - name: Send it to the Chrome Web Store
+        run: node scripts/publish-extension.mjs
+        env:
+          CWS_SERVICE_ACCOUNT: ${{ secrets.CWS_SERVICE_ACCOUNT }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
