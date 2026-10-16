@@ -78,11 +78,7 @@ export async function importFaceitMatch(
     if (!signed.ok) {
       throw new Error(signed.error);
     }
-    await panel.importFaceit(origin, {
-      match_id: matchId,
-      map: index + 1,
-      url: signed.value,
-    });
+    await panel.importFaceit(origin, { match_id: matchId, url: signed.value });
   }
   return demos.length;
 }

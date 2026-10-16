@@ -43,9 +43,15 @@ const details = computed(() =>
   ].filter(Boolean),
 );
 
-const state = computed(() =>
-  props.progress ? "working" : (props.lookup?.state ?? "none"),
-);
+const state = computed(() => {
+  if (props.progress) {
+    return "working";
+  }
+  if (props.lookup?.state === "none" && props.lookup.match_ids?.length) {
+    return "partial";
+  }
+  return props.lookup?.state ?? "none";
+});
 
 const matchId = computed(
   () => props.lookup?.match_id ?? props.lookup?.match_ids?.[0],

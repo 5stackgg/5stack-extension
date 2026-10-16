@@ -80,7 +80,7 @@ export const panel = {
     ),
   importFaceit: (
     origin: string,
-    body: { match_id: string; map: number; url: string },
+    body: { match_id: string; url: string },
   ) => call<Lookup>(origin, "faceit", body),
   importValve: (origin: string, shareCodes: Array<string>) =>
     call<{ valve: Record<string, Lookup> }>(origin, "valve", {

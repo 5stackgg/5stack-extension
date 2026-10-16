@@ -98,7 +98,7 @@ Certify all three: not sold to third parties; not used or transferred for
 purposes unrelated to the item's single purpose; not used or transferred to
 determine creditworthiness or for lending.
 
-**Privacy policy URL:** https://docs.5stack.gg/extension/privacy
+**Privacy policy URL:** https://docs.5stack.gg/features/browser-extension-privacy
 
 ## Distribution
 

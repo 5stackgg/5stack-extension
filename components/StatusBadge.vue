@@ -4,7 +4,7 @@ import { ArrowUpRight, Loader2 } from "lucide-vue-next";
 import type { ImportState } from "@/lib/panel";
 
 const props = defineProps<{
-  state: ImportState | "working";
+  state: ImportState | "working" | "partial";
   href?: string;
 }>();
 
@@ -13,6 +13,11 @@ const look = computed(
     ({
       imported: {
         label: "In 5Stack",
+        classes:
+          "border-[hsl(var(--success)/0.4)] bg-[hsl(var(--success)/0.12)] text-success",
+      },
+      partial: {
+        label: "Partial",
         classes:
           "border-[hsl(var(--success)/0.4)] bg-[hsl(var(--success)/0.12)] text-success",
       },
