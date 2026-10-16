@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { ArrowUpRight, CircleCheck, Loader2 } from "lucide-vue-next";
 import type { Candidate } from "@/lib/candidates";
 import { mapLabel } from "@/lib/candidates";
 import type { Lookup } from "@/lib/panel";
-import StatusBadge from "./StatusBadge.vue";
 
 const props = defineProps<{
   candidate: Candidate;
@@ -42,42 +42,68 @@ const maps = computed(() =>
 const details = computed(() =>
   [
     props.candidate.finishedAt ? formatDate(props.candidate.finishedAt) : null,
-    props.candidate.score,
     props.candidate.source === "faceit" ? "FACEIT" : "Valve",
   ].filter(Boolean),
 );
 
-const state = computed(() => {
-  if (props.progress) {
+const mode = computed(() => {
+  const state = props.lookup?.state ?? "none";
+  if (props.progress || state === "queued" || state === "importing") {
     return "working";
   }
-  if (props.lookup?.state === "none" && props.lookup.match_ids?.length) {
-    return "partial";
-  }
-  return props.lookup?.state ?? "none";
+  return state === "imported" ? "imported" : "pending";
 });
 
-const matchId = computed(
-  () => props.lookup?.match_id ?? props.lookup?.match_ids?.[0],
-);
+const matchUrl = computed(() => {
+  const id = props.lookup?.match_id ?? props.lookup?.match_ids?.[0];
+  return mode.value === "imported" && id
+    ? `${props.origin}/matches/${id}`
+    : undefined;
+});
 
-const note = computed(
-  () =>
-    props.progress ??
+const note = computed(() => {
+  if (props.progress) {
+    return { text: props.progress, tone: "text-[hsl(var(--tac-amber))]" };
+  }
+  if (mode.value === "working") {
+    return {
+      text: props.lookup?.state === "importing" ? "Importing" : "Queued",
+      tone: "text-[hsl(var(--tac-amber))]",
+    };
+  }
+  const failure =
     props.error ??
-    (props.lookup?.state === "failed" ? props.lookup.reason : undefined) ??
-    props.disabledReason,
-);
+    (props.lookup?.state === "failed" ? props.lookup.reason : undefined);
+  if (failure) {
+    return { text: failure, tone: "text-destructive" };
+  }
+  if (props.disabledReason) {
+    return { text: props.disabledReason, tone: "text-muted-foreground" };
+  }
+  if (props.lookup?.match_ids?.length && mode.value === "pending") {
+    return {
+      text: "Some maps are already in 5Stack",
+      tone: "text-muted-foreground",
+    };
+  }
+  return null;
+});
 </script>
 
 <template>
-  <label
+  <component
+    :is="matchUrl ? 'a' : 'label'"
+    :href="matchUrl"
+    :target="matchUrl ? '_blank' : undefined"
+    rel="noreferrer"
     :class="[
-      'group flex items-start gap-3 border-b border-border px-4 py-3 transition-colors duration-150 last:border-b-0',
-      selectable ? 'cursor-pointer hover:bg-muted/30' : '',
+      'group flex items-start gap-3 border-b border-border px-4 py-2.5 transition-colors duration-150 last:border-b-0',
+      selectable || matchUrl ? 'cursor-pointer hover:bg-muted/30' : '',
+      !selectable && mode === 'pending' ? 'opacity-60' : '',
     ]"
   >
     <input
+      v-if="mode === 'pending'"
       type="checkbox"
       class="mt-0.5 size-4 shrink-0 cursor-pointer accent-[hsl(var(--tac-amber))] disabled:cursor-default disabled:opacity-30"
       :checked="selected"
@@ -85,38 +111,33 @@ const note = computed(
       :aria-label="`Select ${maps}`"
       @change="$emit('toggle')"
     />
+    <Loader2
+      v-else-if="mode === 'working'"
+      class="mt-0.5 size-4 shrink-0 animate-spin text-[hsl(var(--tac-amber))] motion-reduce:animate-none"
+    />
+    <CircleCheck v-else class="mt-0.5 size-4 shrink-0 text-success" />
+
     <div class="min-w-0 flex-1">
-      <div class="flex items-center justify-between gap-2">
-        <div class="truncate text-sm font-semibold">{{ maps }}</div>
-        <StatusBadge
-          :state="state"
-          :href="matchId ? `${origin}/matches/${matchId}` : undefined"
-        />
+      <div class="flex items-baseline justify-between gap-3">
+        <span class="truncate text-sm font-semibold">{{ maps }}</span>
+        <span
+          v-if="candidate.score"
+          class="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
+          >{{ candidate.score.replace(" : ", " – ") }}</span
+        >
       </div>
-      <div
-        v-if="candidate.title"
-        class="truncate text-xs text-muted-foreground"
-      >
-        {{ candidate.title }}
-      </div>
-      <div
-        class="mt-0.5 font-mono text-[0.64rem] uppercase tracking-[0.1em] text-muted-foreground"
-      >
+      <div class="mt-0.5 truncate text-xs text-muted-foreground">
         {{ details.join(" · ") }}
+        <template v-if="candidate.title"> · {{ candidate.title }}</template>
       </div>
-      <div
-        v-if="note"
-        :class="[
-          'mt-1 text-xs',
-          error || lookup?.state === 'failed'
-            ? 'text-destructive'
-            : progress
-              ? 'text-[hsl(var(--tac-amber))]'
-              : 'text-muted-foreground',
-        ]"
-      >
-        {{ note }}
+      <div v-if="note" class="mt-1 text-xs" :class="note.tone">
+        {{ note.text }}
       </div>
     </div>
-  </label>
+
+    <ArrowUpRight
+      v-if="matchUrl"
+      class="mt-0.5 size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+    />
+  </component>
 </template>

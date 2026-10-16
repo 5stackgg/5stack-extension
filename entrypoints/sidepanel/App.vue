@@ -6,6 +6,7 @@ import AppHeader from "@/components/AppHeader.vue";
 import LoginGate from "@/components/LoginGate.vue";
 import MatchRow from "@/components/MatchRow.vue";
 import OriginSetup from "@/components/OriginSetup.vue";
+import AnimatedFilters from "@/components/ui/AnimatedFilters.vue";
 import Button from "@/components/ui/Button.vue";
 import type { Candidate } from "@/lib/candidates";
 import { discover, importFaceitMatch } from "@/lib/discover";
@@ -77,6 +78,62 @@ const pageTitle = computed(() => {
       return "";
   }
 });
+
+type Tab = "import" | "working" | "imported" | "others";
+
+const listTab = ref<Tab>("import");
+
+function tabOf(candidate: Candidate): Tab {
+  const state = lookups.value[candidate.key]?.state ?? "none";
+  if (progress.value[candidate.key] || state === "queued" || state === "importing") {
+    return "working";
+  }
+  if (state === "imported") {
+    return "imported";
+  }
+  if (!candidate.own && user.value?.role !== "administrator") {
+    return "others";
+  }
+  return "import";
+}
+
+const tabCounts = computed(() => {
+  const counts: Record<Tab, number> = { import: 0, working: 0, imported: 0, others: 0 };
+  for (const candidate of candidates.value) {
+    counts[tabOf(candidate)]++;
+  }
+  return counts;
+});
+
+const tabOptions = computed(() => [
+  { key: "import", label: "To Import", count: tabCounts.value.import },
+  { key: "working", label: "Importing", count: tabCounts.value.working },
+  { key: "imported", label: "Imported", count: tabCounts.value.imported },
+  ...(tabCounts.value.others > 0
+    ? [{ key: "others", label: "Others", count: tabCounts.value.others }]
+    : []),
+]);
+
+const tabModel = computed({
+  get: () => listTab.value,
+  set: (next: string) => {
+    listTab.value = next as Tab;
+  },
+});
+
+const visibleCandidates = computed(() =>
+  candidates.value.filter((candidate) => tabOf(candidate) === listTab.value),
+);
+
+const emptyTabText = computed(
+  () =>
+    ({
+      import: "Nothing left to import here.",
+      working: "Nothing importing right now.",
+      imported: "None of these are in 5Stack yet.",
+      others: "",
+    })[listTab.value],
+);
 
 const selectedCandidates = computed(() =>
   candidates.value.filter((candidate) => selected.value.has(candidate.key)),
@@ -218,6 +275,10 @@ async function refreshPage(force = false) {
     await lookupAll();
     if (run === discoverRun) {
       selectNew();
+      listTab.value =
+        tabCounts.value.import > 0 || tabCounts.value.imported === 0
+          ? "import"
+          : "imported";
     }
   } catch (error) {
     if (run === discoverRun) {
@@ -496,15 +557,13 @@ onBeforeUnmount(() => {
               />
               <span class="truncate">{{ pageTitle }}</span>
             </div>
-            <Button
-              v-if="candidates.length > 1"
-              variant="ghost"
-              size="xs"
-              class="font-mono text-[0.6rem] uppercase tracking-[0.14em]"
-              @click="selectNew"
-            >
-              Select New
-            </Button>
+          </div>
+
+          <div
+            v-if="!discovering && !discoverProblem && candidates.length > 0"
+            class="border-b border-border px-4 py-2.5"
+          >
+            <AnimatedFilters v-model="tabModel" :options="tabOptions" />
           </div>
 
           <div v-if="discovering" class="divide-y divide-border">
@@ -533,6 +592,13 @@ onBeforeUnmount(() => {
             }}
           </p>
 
+          <p
+            v-else-if="visibleCandidates.length === 0"
+            class="p-4 text-[0.85rem] text-muted-foreground"
+          >
+            {{ emptyTabText }}
+          </p>
+
           <TransitionGroup
             v-else
             tag="div"
@@ -540,7 +606,7 @@ onBeforeUnmount(() => {
             enter-from-class="opacity-0"
           >
             <MatchRow
-              v-for="candidate in candidates"
+              v-for="candidate in visibleCandidates"
               :key="candidate.key"
               :candidate="candidate"
               :lookup="lookups[candidate.key]"
