@@ -16,9 +16,13 @@ export type LeetifyMatch = {
   stats?: Array<{ steam64_id?: string }>;
 };
 
-export function leetifyCandidate(match: LeetifyMatch): Candidate | null {
+export function leetifyCandidate(
+  match: LeetifyMatch,
+  own: boolean,
+): Candidate | null {
   const sourceId = match.data_source_match_id ?? "";
   const fields = {
+    own,
     mapNames: match.map_name ? [match.map_name] : [],
     finishedAt: match.finished_at ?? null,
     score:
@@ -62,9 +66,10 @@ async function profileMatches(steamId: string): Promise<Array<LeetifyMatch>> {
 
 export async function leetifyProfileCandidates(
   steamId: string,
+  viewer: string,
 ): Promise<Array<Candidate>> {
   const candidates = (await profileMatches(steamId))
-    .map(leetifyCandidate)
+    .map((match) => leetifyCandidate(match, steamId === viewer))
     .filter((candidate): candidate is Candidate => candidate !== null);
   return candidates.slice(0, MAX_MATCHES);
 }
@@ -73,21 +78,23 @@ export async function leetifyProfileCandidates(
 // player's match list does, so find it in one of theirs.
 export async function leetifyMatchCandidates(
   gameId: string,
+  viewer: string,
 ): Promise<Array<Candidate>> {
   const match = await get<LeetifyMatch>(
     `/v2/matches/${encodeURIComponent(gameId)}`,
   );
-  const players = (match.stats ?? [])
+  const everyone = (match.stats ?? [])
     .map((stat) => stat.steam64_id)
-    .filter((id): id is string => !!id)
-    .slice(0, 3);
+    .filter((id): id is string => !!id);
+  const played = everyone.includes(viewer);
+  const players = played ? [viewer] : everyone.slice(0, 3);
 
   for (const steamId of players) {
     const listed = (await profileMatches(steamId).catch(() => [])).find(
       (candidate) => candidate.id === gameId,
     );
     if (listed) {
-      const candidate = leetifyCandidate(listed);
+      const candidate = leetifyCandidate(listed, played);
       return candidate ? [candidate] : [];
     }
   }

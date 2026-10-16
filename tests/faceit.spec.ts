@@ -12,7 +12,10 @@ describe("roomCandidate", () => {
         state: "FINISHED",
         finishedAt: "2026-10-05T23:17:49Z",
         demoURLs: [RESOURCE],
-        teams: { faction1: { name: "team_a" }, faction2: { name: "team_b" } },
+        teams: {
+          faction1: { name: "team_a", roster: [{ gameId: "76561198000000001" }] },
+          faction2: { name: "team_b", roster: [{ gameId: "76561198000000002" }] },
+        },
         voting: { map: { pick: ["de_ancient"] } },
         results: [
           {
@@ -20,8 +23,9 @@ describe("roomCandidate", () => {
             factions: { faction1: { score: 13 }, faction2: { score: 8 } },
           },
         ],
-      }),
+      }, "76561198000000002"),
     ).toEqual({
+      own: true,
       key: `faceit:${ROOM}`,
       source: "faceit",
       id: ROOM,
@@ -43,8 +47,8 @@ describe("roomCandidate", () => {
         { winner: "faction2" },
         { winner: "faction1" },
       ],
-    });
-    expect(candidate).toMatchObject({ maps: 3, score: "2 : 1" });
+    }, "76561198000000009");
+    expect(candidate).toMatchObject({ maps: 3, score: "2 : 1", own: false });
   });
 
   it.each([
@@ -52,7 +56,7 @@ describe("roomCandidate", () => {
     ["a room without demos yet", { id: ROOM, state: "FINISHED", demoURLs: [] }],
     ["nothing", undefined],
   ])("offers nothing for %s", (_, payload) => {
-    expect(roomCandidate(payload)).toBeNull();
+    expect(roomCandidate(payload, "76561198000000001")).toBeNull();
   });
 });
 
@@ -95,7 +99,7 @@ describe("historyCandidates", () => {
         gameMode: "5v5",
         matchRound: "1",
       },
-    ]);
+    ], true);
 
     expect(candidates).toEqual([
       expect.objectContaining({

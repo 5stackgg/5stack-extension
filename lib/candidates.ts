@@ -7,6 +7,7 @@ export type Candidate = {
   finishedAt: string | null;
   score: string | null;
   title: string | null;
+  own: boolean;
 };
 
 export function faceitCandidate(

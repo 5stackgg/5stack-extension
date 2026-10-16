@@ -114,7 +114,7 @@ export async function faceitSign(
 const MATCH_ID =
   /^1-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type FaceitTeam = { name?: string };
+type FaceitTeam = { name?: string; roster?: Array<{ gameId?: string }> };
 
 export type FaceitRoomPayload = {
   id?: string;
@@ -140,6 +140,7 @@ export type FaceitHistoryRow = {
 
 export function roomCandidate(
   payload: FaceitRoomPayload | undefined,
+  steamId: string,
 ): Candidate | null {
   if (!payload?.id || payload.state !== "FINISHED") {
     return null;
@@ -161,7 +162,11 @@ export function roomCandidate(
   }
 
   const teams = payload.teams;
+  const played = [teams?.faction1, teams?.faction2]
+    .flatMap((team) => team?.roster ?? [])
+    .some((player) => player.gameId === steamId);
   return faceitCandidate({
+    own: played,
     id: payload.id.toLowerCase(),
     maps: demos.length,
     mapNames: payload.voting?.map?.pick ?? [],
@@ -178,6 +183,7 @@ export function roomCandidate(
 // one match id.
 export function historyCandidates(
   rows: Array<FaceitHistoryRow>,
+  own: boolean,
 ): Array<Candidate> {
   const byMatch = new Map<string, Array<FaceitHistoryRow>>();
   for (const row of rows) {
@@ -195,6 +201,7 @@ export function historyCandidates(
     const finished = Math.max(...ordered.map((map) => map.date ?? 0));
     const only = ordered.length === 1 ? ordered[0] : undefined;
     return faceitCandidate({
+      own,
       id,
       maps: ordered.length,
       mapNames: ordered.map((map) => map.i1 ?? "").filter(Boolean),

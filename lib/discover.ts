@@ -20,20 +20,21 @@ async function faceit<T>(tabId: number, path: string): Promise<T> {
   return result.value as T;
 }
 
-async function faceitHistory(
+export async function faceitHistory(
   tabId: number,
   playerId: string,
+  own: boolean,
 ): Promise<Array<Candidate>> {
   const rows = await faceit<Array<FaceitHistoryRow>>(
     tabId,
     `/api/stats/v1/stats/time/users/${playerId}/games/cs2?page=0&size=20`,
   );
-  return historyCandidates(Array.isArray(rows) ? rows : []);
+  return historyCandidates(Array.isArray(rows) ? rows : [], own);
 }
 
 // Off a match or player page, the list is the signed-in player's own: their
 // FACEIT account as 5Stack knows it, else whoever is logged in to FACEIT.
-async function ownFaceitId(tabId: number, user: PanelUser) {
+export async function ownFaceitId(tabId: number, user: PanelUser) {
   if (user.faceit?.player_id) {
     return user.faceit.player_id;
   }
@@ -55,29 +56,31 @@ export async function discover(
         tabId,
         `/api/match/v2/match/${page.matchId}`,
       );
-      const candidate = roomCandidate(room.payload);
+      const candidate = roomCandidate(room.payload, user.steam_id);
       return candidate ? [candidate] : [];
     }
 
     if (page.kind === "home") {
       const playerId = await ownFaceitId(tabId, user);
-      return playerId ? faceitHistory(tabId, playerId) : [];
+      return playerId ? faceitHistory(tabId, playerId, true) : [];
     }
 
-    const found = await faceit<{ payload?: { id?: string } }>(
-      tabId,
-      `/api/users/v1/nicknames/${encodeURIComponent(page.nickname)}`,
-    );
-    return found.payload?.id ? faceitHistory(tabId, found.payload.id) : [];
+    const found = await faceit<{
+      payload?: { id?: string; games?: { cs2?: { game_player_id?: string } } };
+    }>(tabId, `/api/users/v1/nicknames/${encodeURIComponent(page.nickname)}`);
+    const own = found.payload?.games?.cs2?.game_player_id === user.steam_id;
+    return found.payload?.id
+      ? faceitHistory(tabId, found.payload.id, own)
+      : [];
   }
 
   if (page.site === "leetify") {
     if (page.kind === "home") {
-      return leetifyProfileCandidates(user.steam_id);
+      return leetifyProfileCandidates(user.steam_id, user.steam_id);
     }
     return page.kind === "profile"
-      ? leetifyProfileCandidates(page.steamId)
-      : leetifyMatchCandidates(page.gameId);
+      ? leetifyProfileCandidates(page.steamId, user.steam_id)
+      : leetifyMatchCandidates(page.gameId, user.steam_id);
   }
 
   return [];

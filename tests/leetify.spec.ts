@@ -14,12 +14,16 @@ const base = {
 describe("leetifyCandidate", () => {
   it("turns a matchmaking match into a share code import", () => {
     expect(
-      leetifyCandidate({
-        ...base,
-        data_source: "matchmaking",
-        data_source_match_id: "CSGO-Nacov-KbYev-J2EN9-3XS8v-8rP3A",
-      }),
+      leetifyCandidate(
+        {
+          ...base,
+          data_source: "matchmaking",
+          data_source_match_id: "CSGO-Nacov-KbYev-J2EN9-3XS8v-8rP3A",
+        },
+        true,
+      ),
     ).toEqual({
+      own: true,
       key: "valve:CSGO-Nacov-KbYev-J2EN9-3XS8v-8rP3A",
       source: "valve",
       id: "CSGO-Nacov-KbYev-J2EN9-3XS8v-8rP3A",
@@ -33,12 +37,16 @@ describe("leetifyCandidate", () => {
 
   it("turns a FACEIT match into a FACEIT import by its room id", () => {
     expect(
-      leetifyCandidate({
-        ...base,
-        data_source: "faceit",
-        data_source_match_id: "1-C0D53305-38d8-4d84-9f40-cd0a6032e5bd",
-      }),
+      leetifyCandidate(
+        {
+          ...base,
+          data_source: "faceit",
+          data_source_match_id: "1-C0D53305-38d8-4d84-9f40-cd0a6032e5bd",
+        },
+        false,
+      ),
     ).toMatchObject({
+      own: false,
       key: "faceit:1-c0d53305-38d8-4d84-9f40-cd0a6032e5bd",
       source: "faceit",
       maps: 1,
@@ -52,7 +60,7 @@ describe("leetifyCandidate", () => {
     ["faceit", "not-a-room"],
   ])("skips a %s match it cannot import", (data_source, data_source_match_id) => {
     expect(
-      leetifyCandidate({ ...base, data_source, data_source_match_id }),
+      leetifyCandidate({ ...base, data_source, data_source_match_id }, true),
     ).toBeNull();
   });
 });

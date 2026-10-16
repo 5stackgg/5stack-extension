@@ -5,7 +5,9 @@ looking at. The match does not have to be yours.
 
 Click the 5Stack icon on any of these and a side panel lists every match on the
 page that has a demo, marks the ones already in your panel, and imports the
-rest:
+ones you played in. The panel refuses anyone else's match (administrators
+excepted), and the icon's badge counts your own matches that are not in 5Stack
+yet.
 
 | Page | What it finds |
 | --- | --- |

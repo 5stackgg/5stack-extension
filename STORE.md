@@ -94,7 +94,10 @@ Import the Counter-Strike 2 matches shown on the FACEIT or Leetify page the user
   their own 5Stack panel, which is how the panel knows who is importing. The
   extension never reads or stores it, or the FACEIT login.
 - **Website content:** match ids, share codes and FACEIT demo download links
-  from the page the user is on, sent to the user's 5Stack panel.
+  from the page the user is on, sent to the user's 5Stack panel. When the user
+  opens a FACEIT or Leetify page, the extension also checks their own recent
+  matches against their panel to show how many are not imported yet on its
+  icon.
 
 Certify all three: not sold to third parties; not used or transferred for
 purposes unrelated to the item's single purpose; not used or transferred to

@@ -20,6 +20,7 @@ import {
   savedPanels,
 } from "@/lib/panel";
 import { activeTab } from "@/lib/tabs";
+import { REFRESH_BADGE } from "@/lib/badge";
 
 type Phase = "loading" | "setup" | "error" | "login" | "ready";
 
@@ -84,6 +85,9 @@ const selectedCandidates = computed(() =>
 function disabledReason(candidate: Candidate): string | undefined {
   if (user.value && !user.value.imports[candidate.source]) {
     return `${candidate.source === "faceit" ? "FACEIT" : "Valve"} imports are off on this panel.`;
+  }
+  if (!candidate.own && user.value?.role !== "administrator") {
+    return "Only matches you played can be imported.";
   }
   return undefined;
 }
@@ -177,6 +181,7 @@ async function logout() {
   user.value = null;
   candidates.value = [];
   phase.value = "login";
+  void browser.runtime.sendMessage(REFRESH_BADGE).catch(() => undefined);
 }
 
 async function refreshPage(force = false) {
@@ -351,6 +356,7 @@ async function importSelected() {
     await lookupAll();
   } finally {
     importing.value = false;
+    void browser.runtime.sendMessage(REFRESH_BADGE).catch(() => undefined);
   }
 }
 
