@@ -57,39 +57,45 @@ const label =
     class="flex items-center gap-3 border-b border-border bg-card/50 px-4 py-3 [backdrop-filter:blur(6px)]"
   >
     <img src="/icon/48.png" alt="" class="size-8 rounded-md" />
-    <div class="min-w-0 flex-1">
-      <div class="text-sm font-bold uppercase tracking-[0.18em]">5Stack</div>
-      <DropdownMenuRoot>
-        <DropdownMenuTrigger
-          class="flex max-w-full items-center gap-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground"
-          aria-label="Switch panel"
-        >
-          <span class="truncate">{{ host }}</span>
-          <ChevronDown class="size-3 shrink-0" />
-        </DropdownMenuTrigger>
-        <DropdownMenuPortal>
-          <DropdownMenuContent :class="menu" align="start" :side-offset="6">
-            <DropdownMenuLabel :class="label">Panels</DropdownMenuLabel>
-            <DropdownMenuItem
-              v-for="panel in panels"
-              :key="panel"
-              :class="item"
-              @select="$emit('switch-panel', panel)"
-            >
-              <Check
-                :class="panel === origin ? 'opacity-100' : 'opacity-0'"
-                class="text-[hsl(var(--tac-amber))]"
-              />
-              <span class="truncate">{{ hostOf(panel) }}</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator class="-mx-1 my-1 h-px bg-border" />
-            <DropdownMenuItem :class="item" @select="$emit('add-panel')">
-              <Plus />
-              Add a Panel
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenuPortal>
-      </DropdownMenuRoot>
+    <div class="flex-1">
+      <div class="whitespace-nowrap text-sm font-bold uppercase tracking-[0.18em]">
+        Match Importer
+      </div>
+      <!-- Only the title sets how narrow this column can get: a long panel
+           address truncates instead of pushing the header past the edge. -->
+      <div class="[contain:inline-size]">
+        <DropdownMenuRoot>
+          <DropdownMenuTrigger
+            class="flex max-w-full items-center gap-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground"
+            aria-label="Switch panel"
+          >
+            <span class="truncate">{{ host }}</span>
+            <ChevronDown class="size-3 shrink-0" />
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuContent :class="menu" align="start" :side-offset="6">
+              <DropdownMenuLabel :class="label">Panels</DropdownMenuLabel>
+              <DropdownMenuItem
+                v-for="panel in panels"
+                :key="panel"
+                :class="item"
+                @select="$emit('switch-panel', panel)"
+              >
+                <Check
+                  :class="panel === origin ? 'opacity-100' : 'opacity-0'"
+                  class="text-[hsl(var(--tac-amber))]"
+                />
+                <span class="truncate">{{ hostOf(panel) }}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator class="-mx-1 my-1 h-px bg-border" />
+              <DropdownMenuItem :class="item" @select="$emit('add-panel')">
+                <Plus />
+                Add a Panel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenuRoot>
+      </div>
     </div>
 
     <div v-if="user" class="flex min-w-0 items-center gap-2">

@@ -1,8 +1,8 @@
 # Chrome Web Store listing
 
-What the developer dashboard says for **5Stack**. Paste from here when the
-listing or a permission changes; the `extension` workflow only sends the
-package.
+What the developer dashboard says for **5Stack Match Importer**. Paste from
+here when the listing or a permission changes; the `extension` workflow only
+sends the package.
 
 ## Releasing
 
@@ -27,7 +27,8 @@ item**), because the API can only update an item that exists.
 
 ## Store listing
 
-**Name:** 5Stack
+**Name:** 5Stack Match Importer (the store takes it from the manifest on each
+upload)
 
 **Summary** (132 characters at most):
 Import FACEIT and Leetify CS2 matches into your 5Stack panel from the page you are on, with their demos, stats and replays.
@@ -35,13 +36,13 @@ Import FACEIT and Leetify CS2 matches into your 5Stack panel from the page you a
 **Description:**
 
 5Stack is the open source Counter-Strike 2 platform for running your own
-matches, leagues and tournaments. This extension is its companion for matches
+matches, leagues and tournaments. Match Importer is its companion for matches
 played elsewhere.
 
 Open a FACEIT match room or player page, or a Leetify profile or match, and
-click the 5Stack icon. A side panel lists every match on the page that has a
-demo, shows which ones are already in your 5Stack panel, and imports the rest
-with one click: demo, scoreboard, stats, 2D and 3D replay.
+click the Match Importer icon. A side panel lists every match on the page that
+has a demo, shows which ones are already in your 5Stack panel, and imports the
+rest with one click: demo, scoreboard, stats, 2D and 3D replay.
 
 - Works on anyone's matches, not only your own.
 - FACEIT demos are fetched with your own FACEIT login, the same way FACEIT's

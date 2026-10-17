@@ -41,19 +41,21 @@ function open(url: string) {
   <div class="w-[300px] space-y-4 p-4">
     <div class="flex items-center gap-3">
       <img src="/icon/48.png" alt="" class="size-8 rounded-md" />
-      <div class="flex-1 text-sm font-bold uppercase tracking-[0.18em]">
-        5Stack
+      <div class="min-w-0 flex-1">
+        <div class="text-sm font-bold uppercase tracking-[0.18em]">
+          Match Importer
+        </div>
+        <button
+          type="button"
+          class="flex max-w-full items-center gap-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground"
+          :title="`Open ${host}`"
+          :aria-label="`Open ${host}`"
+          @click="open(origin)"
+        >
+          <span class="truncate">{{ host }}</span>
+          <ExternalLink class="size-3 shrink-0" />
+        </button>
       </div>
-      <button
-        type="button"
-        class="inline-flex h-8 items-center gap-1.5 rounded-md px-2 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        :title="`Open ${host}`"
-        :aria-label="`Open ${host}`"
-        @click="open(origin)"
-      >
-        {{ host }}
-        <ExternalLink class="size-3.5" />
-      </button>
     </div>
 
     <p class="text-[0.85rem] text-muted-foreground">

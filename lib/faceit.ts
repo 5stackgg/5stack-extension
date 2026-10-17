@@ -44,7 +44,7 @@ export async function faceitSign(
   if (!sitekey) {
     return {
       ok: false,
-      error: "FACEIT changed its page. Update the 5Stack extension.",
+      error: "FACEIT changed its page. Update 5Stack Match Importer.",
     };
   }
 

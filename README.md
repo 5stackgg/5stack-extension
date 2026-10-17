@@ -1,13 +1,13 @@
-# 5Stack browser extension
+# 5Stack Match Importer
 
-Import FACEIT and Leetify matches into your 5Stack panel from the page you are
-looking at. The match does not have to be yours.
+A Chrome extension that imports FACEIT and Leetify matches into your 5Stack
+panel from the page you are looking at. The match does not have to be yours.
+It is separate from the 5Stack web app, which it imports into.
 
-Click the 5Stack icon on any of these and a side panel lists every match on the
-page that has a demo, marks the ones already in your panel, and imports the
-ones you played in. The panel refuses anyone else's match (administrators
-excepted), and the icon's badge counts your own matches that are not in 5Stack
-yet.
+Click its icon on any of these and a side panel lists every match on the page
+that has a demo, marks the ones already in your panel, and imports the ones you
+played in. The panel refuses anyone else's match (administrators excepted), and
+the icon's badge counts your own matches that are not in 5Stack yet.
 
 | Page | What it finds |
 | --- | --- |

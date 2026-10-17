@@ -3,7 +3,7 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   modules: ["@wxt-dev/module-vue"],
   manifest: {
-    name: "5Stack",
+    name: "5Stack Match Importer",
     description: "Import FACEIT and Leetify matches into your 5Stack panel.",
     permissions: ["sidePanel", "storage", "scripting"],
     host_permissions: [
