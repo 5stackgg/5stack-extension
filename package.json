@@ -6,7 +6,7 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "scripts": {
-    "third-party-notices": "npx --yes generate-license-file@4.2.5 --input package.json --output THIRD_PARTY_NOTICES.txt --overwrite --omit-versions --eol lf --ci",
+    "third-party-notices": "node scripts/third-party-notices.mjs",
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",

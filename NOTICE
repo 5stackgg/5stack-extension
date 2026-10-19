@@ -72,5 +72,11 @@ the copyright holder: https://github.com/lukepolo
 THIRD-PARTY SOFTWARE
 
 This program uses third-party npm packages, each under its own license.
-Their license texts are collected in THIRD_PARTY_NOTICES.txt. After changing
-dependencies, regenerate it with `yarn third-party-notices`.
+Their license texts are collected in public/third-party-licenses.txt,
+which ships inside the extension. After changing dependencies,
+regenerate it with `yarn third-party-notices`.
+
+
+The Oxanium font in assets/fonts is Copyright 2019 The Oxanium Project
+Authors (https://github.com/sevmeyer/oxanium) and is licensed under the
+SIL Open Font License 1.1 (public/Oxanium-OFL.txt).
