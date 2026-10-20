@@ -4,8 +4,9 @@
   "version": "0.1.2",
   "private": true,
   "type": "module",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "scripts": {
+    "third-party-notices": "node scripts/third-party-notices.mjs",
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
